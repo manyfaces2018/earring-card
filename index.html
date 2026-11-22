@@ -1,163 +1,2631 @@
-/**
- * 百臉 Manyfaces 耳卡打孔模擬器 - Google Apps Script 後端
- * 功能：
- * 1. 記錄客人使用軌跡（IG 帳號、最後停留關卡、Step 1~5 秒數、總秒數）至 Google 試算表
- * 2. 收到「確認製作」時，寄信至指定 Gmail，主旨為客人 IG/Email，內文含完整規格，附件為 1:1 mm SVG 完稿檔
- */
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>百臉 Manyfaces - 耳卡打孔模擬器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Huninn&family=Noto+Sans+TC:wght@400;500;700;900&family=Noto+Serif+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        input {
+            user-select: auto;
+            -webkit-user-select: auto;
+        }
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f8f9fa;
+            background-image: 
+                linear-gradient(to right, rgba(0,0,0,0.04) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(0,0,0,0.04) 1px, transparent 1px);
+            background-size: 20px 20px;
+            color: #111111;
+            overflow: hidden;
+            height: 100dvh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+        }
+        /* 歐美粗框立體卡片與按鈕風格 */
+        .euro-card {
+            background: #ffffff;
+            border: 2.5px solid #111111;
+            border-radius: 16px;
+            box-shadow: 4px 4px 0px #111111;
+        }
+        .euro-card-orange {
+            background: #fffaf5;
+            border: 2.5px solid #f97316;
+            border-radius: 16px;
+            box-shadow: 4px 4px 0px #111111;
+        }
+        .euro-btn {
+            background: #ffffff;
+            border: 2px solid #111111;
+            border-radius: 12px;
+            box-shadow: 2.5px 2.5px 0px #111111;
+            transition: all 0.1s ease;
+        }
+        .euro-btn:active {
+            transform: translate(1.5px, 1.5px);
+            box-shadow: 1px 1px 0px #111111;
+        }
+        .euro-btn-orange {
+            background: #f97316;
+            color: #ffffff;
+            border: 2px solid #111111;
+            border-radius: 12px;
+            box-shadow: 3px 3px 0px #111111;
+            transition: all 0.1s ease;
+        }
+        .euro-btn-orange:active {
+            transform: translate(2px, 2px);
+            box-shadow: 1px 1px 0px #111111;
+        }
+        /* 隱藏捲軸但保留滑動 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        /* 自訂 Radio 圓點樣式 */
+        input[type="radio"] {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid #9ca3af;
+            border-radius: 50%;
+            outline: none;
+            display: inline-grid;
+            place-content: center;
+            background: #fff;
+            cursor: pointer;
+            margin: 0;
+        }
+        input[type="radio"]:checked {
+            border-color: #f97316;
+            border-width: 5px;
+        }
+        input[type="radio"]:disabled {
+            background: #e5e7eb;
+            border-color: #d1d5db;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <!-- ==================== 頂部品牌橫幅 ==================== -->
+    <header class="w-full bg-[#4b5156] text-white pr-5 py-3 flex items-center gap-3.5 shrink-0 z-30 shadow-sm" style="padding-left: 15pt;">
+        <svg class="h-10 w-auto shrink-0" viewBox="274 391 48 60" xmlns="http://www.w3.org/2000/svg" aria-label="百臉 Manyfaces">
+            <g fill="#F18E14">
+                <path d="M286.9,395.4h5.3h0.8c0.1,0,0.2,0,0.3-0.1s0.2-0.2,0.2-0.3s0.1-0.3,0.1-0.5c0-0.2,0-0.5,0-0.8
+                    c0-0.3,0-0.6,0-0.8c0-0.2-0.1-0.4-0.1-0.5c-0.1-0.1-0.1-0.2-0.2-0.3c-0.1-0.1-0.2-0.1-0.3-0.1h-17.3c-0.1,0-0.2,0-0.3,0.1
+                    c-0.1,0.1-0.2,0.2-0.2,0.3c-0.1,0.1-0.1,0.3-0.1,0.5c0,0.2,0,0.5,0,0.8c0,0.3,0,0.6,0,0.8c0,0.2,0.1,0.4,0.1,0.5
+                    c0.1,0.1,0.1,0.2,0.2,0.3s0.2,0.1,0.3,0.1h4.1h0.8l-1.2,2.2l-0.3,0.6c0,0.1-0.1,0.2,0,0.3h-3.3c-0.1,0-0.2,0-0.3,0.1
+                    c0,0-0.1,0.1-0.1,0.1c-0.1,0-0.2,0.1-0.2,0.1c-0.1,0.1-0.1,0.2-0.1,0.3v18.6c0,0.1,0,0.2,0.1,0.3s0.2,0.1,0.3,0.2
+                    c0.1,0.1,0.3,0.1,0.6,0.1c0.2,0,0.5,0,0.9,0c0.4,0,0.6,0,0.9,0c0.2,0,0.4-0.1,0.5-0.1c0.1-0.1,0.2-0.1,0.3-0.2
+                    c0.1-0.1,0.1-0.2,0.1-0.3v-1h1.2h2.1h5h3.3v1c0,0.1,0,0.2,0.1,0.3s0.2,0.1,0.3,0.2c0.1,0.1,0.3,0.1,0.5,0.1c0.2,0,0.5,0,0.9,0
+                    c0.3,0,0.6,0,0.9,0c0.2,0,0.4-0.1,0.5-0.1c0.1-0.1,0.2-0.1,0.3-0.2s0.1-0.2,0.1-0.3v-18.6c0-0.1,0-0.2-0.1-0.3
+                    c0-0.1-0.1-0.1-0.2-0.2c0-0.1-0.1-0.1-0.1-0.1c-0.1-0.1-0.2-0.1-0.3-0.1h-9.1l1.7-3H286.9z M290.1,401.8v3.3h-8.7v3.5h8.7v4.7
+                    h-11.6v-11.5h1.2h2.1h5H290.1z"/>
+                <path d="M293.3,420.5c-0.1-0.1-0.3-0.1-0.5-0.2c-0.2,0-0.5-0.1-0.9-0.1c-0.4,0-0.6,0-0.9,0.1
+                    c-0.2,0-0.4,0.1-0.5,0.2c-0.1,0.1-0.2,0.2-0.3,0.3c-0.1,0.1-0.1,0.2-0.1,0.4v2.2h-6.6v-2.2c0-0.1,0-0.3-0.1-0.4
+                    c-0.1-0.1-0.2-0.2-0.3-0.3c-0.1-0.1-0.3-0.1-0.5-0.2c-0.2,0-0.5-0.1-0.9-0.1c-0.3,0-0.6,0-0.9,0.1c-0.2,0-0.4,0.1-0.6,0.2
+                    c-0.1,0.1-0.2,0.2-0.3,0.3c-0.1,0.1-0.1,0.2-0.1,0.4v24.8c0,0.1,0,0.3,0.1,0.4c0.1,0.1,0.2,0.2,0.3,0.3c0.1,0.1,0.3,0.1,0.6,0.2
+                    c0.2,0,0.5,0.1,0.9,0.1c0.4,0,0.6,0,0.9-0.1c0.2,0,0.4-0.1,0.5-0.2c0.1-0.1,0.2-0.2,0.3-0.3c0.1-0.1,0.1-0.2,0.1-0.4v-19.3h1.5
+                    h3.7h1.5v3.2h-5.5v3.5h5.5v3.2h-5.5v3.5h5.5v5.8c0,0.1,0,0.3,0.1,0.4c0.1,0.1,0.2,0.2,0.3,0.3c0.1,0.1,0.3,0.1,0.5,0.2
+                    c0.2,0,0.5,0.1,0.9,0.1c0.3,0,0.6,0,0.9-0.1c0.2,0,0.4-0.1,0.5-0.2c0.1-0.1,0.2-0.2,0.3-0.3c0.1-0.1,0.1-0.2,0.1-0.4v-24.8
+                    c0-0.1,0-0.3-0.1-0.4C293.6,420.6,293.5,420.5,293.3,420.5z"/>
+                <path d="M295.8,440.7c0.4,0.4,1,0.6,1.6,0.6h0.1c0.6,0,1-0.2,1.4-0.5c0.6-0.6,1.2-1.2,1.7-1.8
+                    c0.1-0.1,0.1-0.1,0.2,0c0.2,0.2,0.4,0.3,0.6,0.4c0.4,0.3,0.8,0.4,1.4,0.4h0.1c0.6,0,1-0.2,1.4-0.5c0.3-0.3,0.5-0.7,0.5-1.1
+                    c0-0.5-0.2-1-0.7-1.3c-0.4-0.3-0.9-0.5-1.4-0.8c-0.1-0.1-0.1-0.1-0.1-0.2c0.1-0.3,0.2-0.5,0.4-0.8c0.1-0.2,0.1-0.3,0.1-0.5
+                    c0-0.3-0.1-0.6-0.3-0.9c-0.3-0.4-0.7-0.6-1.2-0.7h1.8c0.6,0,1.2-0.2,1.6-0.5c0.4-0.4,0.7-0.8,0.7-1.3V427c0-0.5-0.2-1-0.7-1.3
+                    c-0.4-0.3-1-0.5-1.6-0.5h-4.6c-0.6,0-1.2,0.2-1.6,0.5c-0.4,0.4-0.7,0.8-0.7,1.3v4.2c0,0.5,0.2,0.9,0.7,1.3
+                    c0.4,0.4,1,0.5,1.6,0.5h0.5c0,0,0.1,0,0.1,0.1c0,0.1,0,0.2-0.1,0.4c0-0.1-0.1-0.2-0.2-0.2h-1.8c-0.2,0-0.3,0.1-0.3,0.2v2.1
+                    c0,0.2,0.1,0.2,0.3,0.2h0.9c-0.8,1.4-1.9,2.6-3.3,3.3c-0.1,0-0.2,0.1-0.2,0.1c-0.1,0.1-0.1,0.3,0,0.4
+                    C294.9,440.2,295.4,440.4,295.8,440.7z M300,428c0,0,0-0.1,0.1-0.1h1.8c0.1,0,0.1,0,0.1,0.1v2.1c0,0.1,0,0.1-0.1,0.1h-1.8
+                    c-0.1,0-0.1,0-0.1-0.1V428z"/>
+                <path d="M321.4,435.9c0-0.5-0.3-1.7-2.1-2.4c-1.3-0.4-1.6-1-1.5-2.3c0.1-2,0.1-4.1,0-5.9c-0.1-4.1-3.2-6.9-7.8-7
+                    c-2.1,0-4.2-0.1-6.4-0.1h-0.3l0,3h0.3c2.1,0,4.2,0,6.3,0.1c2.8,0,4.6,1.6,4.8,3.9c-0.3-0.1-0.6-0.2-1-0.2h-4.8
+                    c-0.6,0-1.1,0.2-1.6,0.5c-0.5,0.4-0.7,0.8-0.7,1.3v4.3c0,0.5,0.2,0.9,0.7,1.3c0.4,0.3,0.9,0.5,1.5,0.5c0.1,0,0.1,0,0.1,0l0,0
+                    c-0.6,2.3-1.8,4.2-3.6,5.7c-0.4,0.3-0.6,0.7-0.6,1.1c0,0.5,0.2,0.8,0.6,1.1c0.4,0.3,1,0.5,1.5,0.5h0.1c0.5,0,1-0.2,1.4-0.5
+                    c0.7-0.6,1.4-1.3,2-2.1c0,0,0.1-0.1,0.1-0.1c0,0,0.1,0,0.1,0c1.1,0.7,2.1,1.4,2.9,2.1c0.3,0.2,0.7,0.4,1.1,0.4l0,0.9l0,1.4
+                    c0,1-0.1,1.8-0.4,2.4c-1,0.5-2.3,0.7-3.5,0.8c-2,0.2-4-0.1-5.8-0.8c-2.3-0.9-4.2-1.6-6-2c-1.3-0.3-2.5-0.5-3.8-0.7l-0.6-0.1
+                    l0,3.1c0.2,0,2.4,0.4,2.6,0.5c2.2,0.5,4,1,5.5,1.6c0.3,0.1,0.6,0.3,0.9,0.4c0.8,0.3,1.5,0.7,2.3,0.9c1.1,0.3,2.2,0.4,3.4,0.4
+                    c3.3,0,6.4-1,7.2-2l0.2-0.2c0.6-1.1,0.9-2.4,0.9-4.2l0-1.4l0-1.2c-0.1-1.3,0.5-2,1.9-2.7C321.2,437.6,321.4,436.4,321.4,435.9z
+                    M310.3,430.2c-0.2,0-0.2-0.1-0.2-0.1V428c0,0,0-0.1,0.2-0.1h1.8c0.2,0,0.2,0,0.2,0.1v2.1c0,0,0,0.1-0.2,0.1H310.3z
+                    M315.4,437.8c-0.8-0.6-1.8-1.2-3-1.9c-0.1-0.1-0.1-0.2-0.1-0.2c0.1-0.2,0.2-0.4,0.3-0.7c0.1-0.2,0.1-0.3,0.1-0.5
+                    c0-0.3-0.1-0.6-0.3-0.9c-0.3-0.3-0.6-0.6-1.1-0.7h2.4c0.4,0,0.7-0.1,1.1-0.2c0.3,1.4,1.2,2.5,2.5,3.2
+                    C316.5,436.5,315.8,437.1,315.4,437.8z"/>
+                <path d="M299.6,419.4c0.5,0.1,1,0.1,1.5-0.2c0.4-0.2,0.8-0.5,1.2-0.7l3.5-2.5c0.9-0.8,1.7-1.5,2.3-2.3
+                    c0.7,0.8,1.5,1.5,2.5,2.3l3.7,2.5c0.2,0.1,0.4,0.2,0.6,0.3c0.3,0.2,0.6,0.2,1,0.2c0.2,0,0.3,0,0.5-0.1c0.5-0.1,0.9-0.4,1.2-0.8
+                    c0,0,0.1-0.1,0.1-0.1c0.2-0.3,0.3-0.5,0.3-0.9c0-0.2,0-0.3-0.1-0.5l0,0c-0.1-0.4-0.5-0.8-0.9-1c-2.2-1-4.2-2.4-6.1-4.1
+                    c-0.8-0.8-1.8-1.2-2.9-1.2c-1.1,0-2.1,0.4-2.8,1.3c-0.8,1-1.9,1.9-3.1,2.8c-1.2,0.9-2.2,1.5-3.1,2c-0.1,0-0.2,0.1-0.3,0.1
+                    c-0.2,0-0.3,0.1-0.5,0.2c-0.3,0.2-0.3,0.5-0.3,0.7C297.8,418.2,299.2,419.3,299.6,419.4z"/>
+            </g>
+        </svg>
+        <div class="text-[10px] text-gray-200 leading-tight font-medium tracking-wide">
+            <div>I'm Manyfaces.</div>
+            <div>Every face, uniquely packaged.</div>
+        </div>
+    </header>
 
-// ★ 請填入您要收信的 Email（多個信箱請用半形逗號隔開；留空則自動寄給建立此腳本的 Google 帳號本人）
-const OWNER_EMAIL = 'a053999@hotmail.com, rushanlin00@gmail.com';
+    <!-- ==================== 第一關：選擇耳環款式 ==================== -->
+    <section id="step1" class="w-full flex-1 flex flex-col items-center justify-between py-6 px-5 max-w-md mx-auto">
+        <div class="w-full flex flex-col justify-center flex-1 gap-5">
+            <!-- 頂部：左側小人物頭像框 + 右側虛線對話框 -->
+            <div class="flex items-stretch gap-3.5 w-full">
+                <!-- 左側頭像方框 + 頂部橘色 STEP 1 標籤 -->
+                <div class="euro-card w-[84px] h-[84px] shrink-0 relative flex items-center justify-center bg-white mt-2">
+                    <span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#f97316] text-white text-[11px] font-black px-2.5 py-0.5 rounded-md border-2 border-black whitespace-nowrap tracking-wider shadow-[1.5px_1.5px_0px_#111]">
+                        STEP 1
+                    </span>
+                    <svg width="54" height="54" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="40" cy="42" r="28" fill="#ffffff" stroke="#111111" stroke-width="3"/>
+                        <path d="M24 22C30 16 50 16 56 22" stroke="#111111" stroke-width="3" stroke-linecap="round"/>
+                        <circle cx="31" cy="40" r="3" fill="#111111"/>
+                        <circle cx="49" cy="40" r="3" fill="#111111"/>
+                        <path d="M34 50C36.5 53 43.5 53 46 50" stroke="#111111" stroke-width="3" stroke-linecap="round"/>
+                        <circle cx="11" cy="46" r="4" fill="#f97316" stroke="#111111" stroke-width="2"/>
+                        <circle cx="69" cy="46" r="4" fill="#f97316" stroke="#111111" stroke-width="2"/>
+                    </svg>
+                </div>
 
-const SHEET_HEADERS = [
-  'Session ID',
-  '日期時間',
-  'IG 帳號 / 聯絡方式',
-  '最後停留關卡',
-  'Step 1 (秒)',
-  'Step 2 (秒)',
-  'Step 3 (秒)',
-  'Step 4 (秒)',
-  'Step 5 (秒)',
-  '總停留 (秒)',
-  '確認製作規格摘要'
-];
+                <!-- 右側虛線外框對話框 -->
+                <div class="flex-1 bg-white border-[2.5px] border-dashed border-[#111111] rounded-2xl p-4 flex items-center mt-2">
+                    <h2 class="text-[15px] font-black text-gray-900 leading-relaxed tracking-wide">
+                        請問這次主要想搭配哪一種耳環呢？
+                    </h2>
+                </div>
+            </div>
 
-function doPost(e) {
-  const lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(15000);
-    const raw = (e && e.postData && e.postData.contents) ? e.postData.contents : '{}';
-    const data = JSON.parse(raw);
+            <!-- IG 帳號輸入區 -->
+            <div class="w-full bg-white border-2 border-[#111111] rounded-xl p-3 shadow-[2.5px_2.5px_0px_#111111]">
+                <label for="input-user-ig" class="block text-xs font-extrabold text-gray-800 mb-1.5">
+                    請輸入您的 IG 帳號 <span class="text-orange-600">（若無請輸入 fun）</span>
+                </label>
+                <input id="input-user-ig" type="text" placeholder="例如：@manyfaces2018 或 fun"
+                       class="w-full border-2 border-black rounded-lg px-3 py-2 text-sm font-bold focus:border-orange-500 outline-none bg-gray-50">
+            </div>
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheets()[0];
-    ensureHeaders(sheet);
+            <!-- 三個選項按鈕 -->
+            <div class="w-full flex flex-col gap-3.5 mt-1">
+                <button type="button" onclick="selectEarringStyle('stud')" class="euro-btn w-full py-4 px-5 flex items-center justify-between hover:bg-orange-50 cursor-pointer">
+                    <div class="flex items-center gap-3.5">
+                        <span class="w-7 h-7 rounded-full bg-[#fed7aa] border-2 border-[#111111] flex items-center justify-center text-xs font-black text-gray-900">1</span>
+                        <span class="font-black text-base tracking-widest text-gray-900">貼 耳</span>
+                    </div>
+                    <span class="text-xs font-bold text-gray-500">圓形貼耳 →</span>
+                </button>
 
-    const nowStr = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy/MM/dd HH:mm:ss');
-    const sessionId = data.sessionId || ('MF-' + Date.now());
-    const igAccount = data.igAccount || '(未填寫)';
-    const lastStep = data.lastStep || 'Step 1';
-    const d = data.durations || {};
-    const totalSec = data.totalSeconds || 0;
+                <button type="button" onclick="selectEarringStyle('drop')" class="euro-btn w-full py-4 px-5 flex items-center justify-between hover:bg-orange-50 cursor-pointer">
+                    <div class="flex items-center gap-3.5">
+                        <span class="w-7 h-7 rounded-full bg-[#fed7aa] border-2 border-[#111111] flex items-center justify-center text-xs font-black text-gray-900">2</span>
+                        <span class="font-black text-base tracking-widest text-gray-900">垂 墜</span>
+                    </div>
+                    <span class="text-xs font-bold text-gray-500">長條垂墜 →</span>
+                </button>
 
-    let specNote = '';
-    if (data.action === 'submit_order' && data.specs) {
-      const s = data.specs;
-      specNote = `材質:${s.material}｜數量:${s.quantity}｜尺寸:${s.size}｜${s.holeStyle}｜自己抓版型:${s.selfPrice}`;
-    }
+                <button type="button" onclick="selectEarringStyle('both')" class="euro-btn w-full py-4 px-5 flex items-center justify-between hover:bg-orange-50 cursor-pointer">
+                    <div class="flex items-center gap-3.5">
+                        <span class="w-7 h-7 rounded-full bg-[#fed7aa] border-2 border-[#111111] flex items-center justify-center text-xs font-black text-gray-900">3</span>
+                        <span class="font-black text-base tracking-widest text-gray-900">都 有</span>
+                    </div>
+                    <span class="text-xs font-bold text-gray-500">貼耳＋垂墜 →</span>
+                </button>
+            </div>
+        </div>
 
-    upsertSessionRow(sheet, {
-      sessionId,
-      nowStr,
-      igAccount,
-      lastStep,
-      s1: d.step1 || 0,
-      s2: d.step2 || 0,
-      s3: d.step3 || 0,
-      s4: d.step4 || 0,
-      s5: d.step5 || 0,
-      totalSec,
-      specNote
-    });
+        <!-- 底部英文標語 -->
+        <div class="text-[11px] font-bold text-gray-400 tracking-[0.2em] uppercase mt-4">
+            MINIMALIST CARD SIMULATOR
+        </div>
+    </section>
 
-    if (data.action === 'submit_order') {
-      sendOrderEmail(data);
-    }
+    <!-- ==================== 第二關：選擇公版版型 ==================== -->
+    <section id="step2" class="hidden w-full flex-1 flex-col justify-between py-4 max-w-md mx-auto overflow-hidden">
+        <div class="flex items-center justify-between w-full px-4 z-20 shrink-0">
+            <div class="w-[82px] flex justify-start">
+                <button type="button" onclick="backToStep1()" class="euro-btn px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5">
+                    <span>←</span> 上一頁
+                </button>
+            </div>
+            <span class="font-extrabold text-sm bg-white px-3 py-1 border-2 border-black rounded-lg shadow-[2px_2px_0px_#111]">選擇版型</span>
+            <div class="w-[82px] flex justify-end">
+                <span class="text-xs font-extrabold text-black/70 tracking-wider">STEP 2</span>
+            </div>
+        </div>
 
-    return ContentService
-      .createTextOutput(JSON.stringify({ status: 'ok' }))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService
-      .createTextOutput(JSON.stringify({ status: 'error', message: String(err) }))
-      .setMimeType(ContentService.MimeType.JSON);
-  } finally {
-    lock.releaseLock();
-  }
-}
+        <div class="relative w-full flex-1 flex items-center overflow-hidden my-2">
+            <button type="button" onclick="scrollStep2Carousel(-1)" title="上一個版型" class="euro-btn hidden sm:flex absolute left-1.5 top-1/2 -translate-y-1/2 z-30 w-8 h-8 items-center justify-center font-black text-base bg-white/95 hover:bg-orange-50">‹</button>
+            <div id="step2-carousel" class="w-full h-full flex items-center overflow-x-auto no-scrollbar snap-x snap-mandatory px-6 gap-5 cursor-grab">
+                <!-- 由 JS 動態生成版型卡片 -->
+            </div>
+            <button type="button" onclick="scrollStep2Carousel(1)" title="下一個版型" class="euro-btn hidden sm:flex absolute right-1.5 top-1/2 -translate-y-1/2 z-30 w-8 h-8 items-center justify-center font-black text-base bg-white/95 hover:bg-orange-50">›</button>
+        </div>
+    </section>
 
-function ensureHeaders(sheet) {
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(SHEET_HEADERS);
-    sheet.getRange(1, 1, 1, SHEET_HEADERS.length).setFontWeight('bold').setBackground('#fef3c7');
-    sheet.setFrozenRows(1);
-  }
-}
+    <!-- ==================== 第三關：客製化拖曳與文字 ==================== -->
+    <section id="step3" class="hidden w-full flex-1 flex-col justify-between pt-3 max-w-md mx-auto relative overflow-hidden">
+        <!-- 頂部導覽列 -->
+        <div class="flex items-center justify-between w-full px-4 z-20 shrink-0">
+            <div class="w-[82px] flex justify-start">
+                <button type="button" onclick="backToStep2()" class="euro-btn px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5">
+                    <span>←</span> 上一頁
+                </button>
+            </div>
+            <span id="step3-title-size" class="font-extrabold text-sm bg-white px-3 py-1 border-2 border-black rounded-lg shadow-[2px_2px_0px_#111]"></span>
+            <div class="w-[82px] flex justify-end">
+                <span class="text-xs font-extrabold text-black/70 tracking-wider">STEP 3</span>
+            </div>
+        </div>
 
-function upsertSessionRow(sheet, rowObj) {
-  const lastRow = sheet.getLastRow();
-  let targetRow = -1;
+        <!-- 互動畫布區 -->
+        <div id="step3-viewport" class="flex-1 w-full relative flex flex-row items-center overflow-hidden my-1 px-3 gap-3">
+            <!-- 左側工具列 (問號按鈕在 T 上方) -->
+            <div class="flex flex-col gap-3 z-30 shrink-0 self-start pt-2">
+                <button type="button" onclick="showStep3Tip()" title="操作提示" class="euro-btn w-10 h-10 flex items-center justify-center font-black text-lg text-orange-500 bg-white active:bg-orange-100 shadow-[2px_2px_0px_#111]">?</button>
+                <button type="button" onclick="addCustomText()" title="新增文字" class="euro-btn w-10 h-10 flex items-center justify-center font-black text-lg bg-white active:bg-orange-100 shadow-[2px_2px_0px_#111]">T</button>
+                <button type="button" onclick="addIGIcon()" title="新增 IG 圖示" class="euro-btn w-10 h-10 flex items-center justify-center bg-white active:bg-orange-100 shadow-[2px_2px_0px_#111]">
+                    <svg viewBox="0 0 24 24" class="w-6 h-6" fill="none" stroke="#111111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                        <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                        <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                    </svg>
+                </button>
+                <button type="button" onclick="addLogoBox()" title="新增 LOGO 方塊" class="euro-btn w-10 h-10 flex items-center justify-center font-black text-[10px] tracking-tighter bg-white active:bg-orange-100 shadow-[2px_2px_0px_#111]">LOGO</button>
+                <button type="button" onclick="openBgColorModal()" title="變更背景顏色" class="euro-btn w-10 h-10 flex flex-col items-center justify-center font-black text-[10px] leading-none gap-0.5 bg-white active:bg-orange-100 shadow-[2px_2px_0px_#111]">
+                    <span>BG</span>
+                    <span id="bg-btn-dot" class="w-4 h-1.5 rounded-full border border-black" style="background-color:#ffffff;"></span>
+                </button>
+            </div>
 
-  if (lastRow >= 2) {
-    const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-    for (let i = ids.length - 1; i >= 0; i--) {
-      if (String(ids[i][0]) === String(rowObj.sessionId)) {
-        targetRow = i + 2;
-        break;
-      }
-    }
-  }
+            <!-- 卡片本體容器 (獨立於工具列右側，確保完全不遮擋模擬圖) -->
+            <div id="step3-canvas-area" class="flex-1 h-full flex items-center justify-center min-w-0">
+                <div id="step3-scale-wrapper" class="origin-center transition-transform duration-150">
+                    <div id="step3-card" class="relative bg-white shadow-sm overflow-visible" style="border: 0.75pt solid #000000;">
+                        <div id="guides-layer" class="absolute inset-0 pointer-events-none z-0"></div>
+                        <div id="step3-items-layer" class="absolute inset-0 z-10"></div>
+                    </div>
+                </div>
+            </div>
 
-  const rowValues = [
-    rowObj.sessionId,
-    rowObj.nowStr,
-    rowObj.igAccount,
-    rowObj.lastStep,
-    rowObj.s1,
-    rowObj.s2,
-    rowObj.s3,
-    rowObj.s4,
-    rowObj.s5,
-    rowObj.totalSec,
-    rowObj.specNote
-  ];
+            <!-- 右側工具列 (獨立於卡片右側，不遮擋模擬圖) -->
+            <div class="flex flex-col gap-3 z-30 shrink-0 self-start pt-2">
+                <button type="button" id="btn-toggle-earring" onclick="toggleEarringPreview()" title="顯示／隱藏耳環預覽" class="euro-btn w-10 h-10 flex items-center justify-center bg-white active:bg-orange-100 shadow-[2px_2px_0px_#111]">
+                    <svg id="icon-earring-eye" viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="#111111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                </button>
+                <button type="button" id="btn-undo-step3" onclick="undoStep3Action()" title="上一個動作" class="euro-btn w-10 h-10 flex items-center justify-center bg-white active:bg-orange-100 shadow-[2px_2px_0px_#111]">
+                    <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="#111111" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 7v6h6"></path>
+                        <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
+                    </svg>
+                </button>
+                <button type="button" onclick="resetStep3ToDefault()" title="重製（回歸預設值）" class="euro-btn w-10 h-10 flex items-center justify-center font-black text-[11px] bg-white active:bg-orange-100 shadow-[2px_2px_0px_#111]">重製</button>
+            </div>
+        </div>
 
-  if (targetRow !== -1) {
-    // 保留原有的日期時間與已寫入的規格摘要（若本次僅為背景追蹤）
-    const existingTime = sheet.getRange(targetRow, 2).getValue();
-    const existingNote = sheet.getRange(targetRow, 11).getValue();
-    if (existingTime) rowValues[1] = existingTime;
-    if (!rowObj.specNote && existingNote) rowValues[10] = existingNote;
-    sheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
-  } else {
-    sheet.appendRow(rowValues);
-  }
-}
+        <!-- 底部尺寸調整與吊牌孔控制面板 -->
+        <div class="w-full bg-white border-t-2 border-black p-3 shrink-0 rounded-t-2xl shadow-[0_-4px_0_rgba(0,0,0,0.05)] z-20">
+            <div class="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-gray-200">
+                <span class="text-[11px] font-bold text-gray-600 shrink-0">微調位置 (1mm)</span>
+                <div class="flex items-center gap-1.5">
+                    <button type="button" onclick="nudgeSelectedItem(0, -1)" title="往上 1mm" class="euro-btn w-8 h-7 flex items-center justify-center font-black text-xs bg-gray-100 active:bg-orange-200">↑</button>
+                    <button type="button" onclick="nudgeSelectedItem(0, 1)" title="往下 1mm" class="euro-btn w-8 h-7 flex items-center justify-center font-black text-xs bg-gray-100 active:bg-orange-200">↓</button>
+                    <button type="button" onclick="nudgeSelectedItem(-1, 0)" title="往左 1mm" class="euro-btn w-8 h-7 flex items-center justify-center font-black text-xs bg-gray-100 active:bg-orange-200">←</button>
+                    <button type="button" onclick="nudgeSelectedItem(1, 0)" title="往右 1mm" class="euro-btn w-8 h-7 flex items-center justify-center font-black text-xs bg-gray-100 active:bg-orange-200">→</button>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2.5 mb-2.5">
+                <div class="flex flex-col gap-1 min-w-0">
+                    <span class="text-[11px] font-bold text-gray-600">寬度 (mm)</span>
+                    <div class="flex items-center gap-1.5 min-w-0">
+                        <button type="button" onclick="adjustCardDim('w', -1)" class="euro-btn w-7 h-8 shrink-0 flex items-center justify-center font-bold bg-gray-100 active:bg-orange-200">-</button>
+                        <input id="input-card-w" type="number" class="min-w-0 w-full flex-1 border-2 border-black rounded-lg text-center font-bold text-sm h-8 focus:border-orange-500 outline-none" onchange="manualCardDimChange()">
+                        <button type="button" onclick="adjustCardDim('w', 1)" class="euro-btn w-7 h-8 shrink-0 flex items-center justify-center font-bold bg-gray-100 active:bg-orange-200">+</button>
+                    </div>
+                </div>
+                <div class="flex flex-col gap-1 min-w-0">
+                    <span class="text-[11px] font-bold text-gray-600">高度 (mm)</span>
+                    <div class="flex items-center gap-1.5 min-w-0">
+                        <button type="button" onclick="adjustCardDim('h', -1)" class="euro-btn w-7 h-8 shrink-0 flex items-center justify-center font-bold bg-gray-100 active:bg-orange-200">-</button>
+                        <input id="input-card-h" type="number" class="min-w-0 w-full flex-1 border-2 border-black rounded-lg text-center font-bold text-sm h-8 focus:border-orange-500 outline-none" onchange="manualCardDimChange()">
+                        <button type="button" onclick="adjustCardDim('h', 1)" class="euro-btn w-7 h-8 shrink-0 flex items-center justify-center font-bold bg-gray-100 active:bg-orange-200">+</button>
+                    </div>
+                </div>
+            </div>
 
-function sendOrderEmail(data) {
-  const recipient = OWNER_EMAIL || Session.getActiveUser().getEmail();
-  const igAccount = data.igAccount || '未提供帳號';
-  const s = data.specs || {};
-  const textList = Array.isArray(s.textDetails) ? s.textDetails.join('\n   ') : '無新增文字';
+            <div class="flex items-center justify-between mb-2.5">
+                <span class="text-xs font-bold text-gray-700">需要 5mm 吊牌圓孔嗎？</span>
+                <div class="flex gap-4">
+                    <label class="flex items-center gap-1.5 cursor-pointer">
+                        <input type="radio" name="tag-hole-opt" value="yes" onchange="toggleTagHole(true)">
+                        <span class="font-bold text-xs">是</span>
+                    </label>
+                    <label class="flex items-center gap-1.5 cursor-pointer">
+                        <input type="radio" name="tag-hole-opt" value="no" onchange="toggleTagHole(false)" checked>
+                        <span class="font-bold text-xs">否</span>
+                    </label>
+                </div>
+            </div>
 
-  const body = [
-    `您好，收到一筆來自「百臉耳卡打孔模擬器」的確認製作通知！`,
-    ``,
-    `客戶 IG / 聯絡方式：${igAccount}`,
-    `----------------------------------------`,
-    `1. 材質：${s.material || ''}`,
-    `2. 數量：${s.quantity || ''}`,
-    `3. 尺寸：${s.size || ''}`,
-    `4. 打孔款式：${s.holeStyle || ''}`,
-    `5. 背景色碼：${s.bgColor || '#ffffff'}`,
-    `6. IG 圖示設定：${s.igDetail || '無'}`,
-    `7. 文字與字體設定：`,
-    `   ${textList}`,
-    `8. 報價試算：`,
-    `   - 原價（百臉幫你抓版型）：${s.originalPrice || ''}`,
-    `   - 我可以自己抓版型：${s.selfPrice || ''}`,
-    `----------------------------------------`,
-    `※ 附件為 1:1 真實 mm 尺寸之 .svg 檔案，可直接拖入 Adobe Illustrator 完稿。`
-  ].join('\n');
+            <button type="button" onclick="checkoutDesign()" class="euro-btn-orange w-full py-2 font-extrabold text-sm tracking-wider">
+                我 要 這 款 →
+            </button>
+        </div>
+    </section>
 
-  const safeName = igAccount.replace(/[^a-zA-Z0-9_\-@.\u4e00-\u9fa5]/g, '_');
-  const svgContent = data.svgContent || '<svg xmlns="http://www.w3.org/2000/svg"></svg>';
-  const svgBlob = Utilities.newBlob(svgContent, 'image/svg+xml', `耳卡設計_${safeName}.svg`);
+    <!-- ==================== 第四關：選擇紙張材質 ==================== -->
+    <section id="step4" class="hidden w-full flex-1 flex-col justify-between py-4 px-4 max-w-md mx-auto overflow-hidden">
+        <div class="flex items-center justify-between w-full shrink-0">
+            <div class="w-[82px] flex justify-start">
+                <button type="button" onclick="backToStep3()" class="euro-btn px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5">
+                    <span>←</span> 上一頁
+                </button>
+            </div>
+            <span class="font-extrabold text-sm bg-white px-3 py-1 border-2 border-black rounded-lg shadow-[2px_2px_0px_#111]">選擇紙張材質</span>
+            <div class="w-[82px] flex justify-end">
+                <span class="text-xs font-extrabold text-black/70 tracking-wider">STEP 4</span>
+            </div>
+        </div>
 
-  MailApp.sendEmail({
-    to: recipient,
-    subject: igAccount,
-    body: body,
-    attachments: [svgBlob]
-  });
-}
+        <div class="flex-1 overflow-y-auto no-scrollbar py-3 flex flex-col gap-3">
+            <!-- 設計預覽區 -->
+            <div class="euro-card p-3 flex flex-col items-center gap-2">
+                <div id="step4-preview-box" class="w-full min-h-[150px] bg-gray-50 border border-dashed border-gray-300 rounded-xl flex items-center justify-center p-2"></div>
+                <div id="step4-spec-summary" class="text-[11px] font-bold text-gray-600 text-center"></div>
+            </div>
+
+            <!-- 材質選項 1：銅西卡 + 正面霧膜 -->
+            <div id="mat-card-coated" onclick="selectMaterial('coated')" class="euro-card-orange p-4 cursor-pointer transition-all">
+                <div class="flex items-center justify-between mb-1">
+                    <div class="flex items-center gap-2">
+                        <input id="radio-mat-coated" type="radio" name="material-opt" checked>
+                        <span class="font-black text-sm text-gray-900">銅西卡 + 正面霧膜</span>
+                    </div>
+                    <span class="text-[10px] font-extrabold bg-orange-100 text-orange-700 px-2 py-0.5 rounded border border-orange-300">熱銷推薦</span>
+                </div>
+                <p class="text-xs text-gray-600 pl-6 leading-relaxed">紙質挺拔滑順，正面覆霧膜具防潑水與細緻絲絨觸感，色彩飽和度佳。</p>
+            </div>
+
+            <!-- 材質選項 2：頂級象牙 -->
+            <div id="mat-card-ivory" onclick="selectMaterial('ivory')" class="euro-card p-4 cursor-pointer transition-all">
+                <div class="flex items-center justify-between mb-1">
+                    <div class="flex items-center gap-2">
+                        <input id="radio-mat-ivory" type="radio" name="material-opt">
+                        <span class="font-black text-sm text-gray-900">頂級象牙</span>
+                    </div>
+                    <span class="text-[10px] font-extrabold bg-gray-100 text-gray-700 px-2 py-0.5 rounded border border-gray-300">文青質感</span>
+                </div>
+                <p class="text-xs text-gray-600 pl-6 leading-relaxed">天生具備3-8%淺黃色，表面無上膜，不建議印深色底色。</p>
+                <p id="ivory-dark-bg-warning" class="hidden text-[11px] font-extrabold text-orange-600 pl-6 mt-1.5 leading-snug">※ 偵測到您的底色偏深，建議改選銅西卡＋霧膜效果較佳</p>
+            </div>
+        </div>
+
+        <button type="button" onclick="goToStep5()" class="euro-btn-orange w-full py-2.5 font-extrabold text-sm tracking-wider shrink-0 mt-2">
+            下一步：查看報價 →
+        </button>
+    </section>
+
+    <!-- ==================== 第五關：設計確認與報價 ==================== -->
+    <section id="step5" class="hidden w-full flex-1 flex-col justify-between py-4 px-4 max-w-md mx-auto overflow-hidden">
+        <div class="flex items-center justify-between w-full shrink-0">
+            <div class="w-[82px] flex justify-start">
+                <button type="button" onclick="backToStep4()" class="euro-btn px-3 py-1.5 text-xs font-extrabold flex items-center gap-1.5">
+                    <span>←</span> 上一頁
+                </button>
+            </div>
+            <span class="font-extrabold text-sm bg-white px-3 py-1 border-2 border-black rounded-lg shadow-[2px_2px_0px_#111]">報價與確認</span>
+            <div class="w-[82px] flex justify-end">
+                <span class="text-xs font-extrabold text-black/70 tracking-wider">STEP 5</span>
+            </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto no-scrollbar py-3 flex flex-col gap-3">
+            <!-- 完稿預覽與規格 -->
+            <div class="euro-card p-3 flex flex-col items-center gap-2">
+                <div id="step5-preview-box" class="w-full min-h-[145px] bg-gray-50 border border-dashed border-gray-300 rounded-xl flex items-center justify-center p-2"></div>
+                <div id="step5-spec-summary" class="w-full text-xs font-bold text-gray-700 space-y-1 bg-gray-50 p-2.5 rounded-lg border border-gray-200"></div>
+            </div>
+
+            <!-- 數量與報價試算 -->
+            <div class="euro-card-orange p-3.5 flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                    <span id="qty-unit-label" class="text-xs font-extrabold text-gray-800">數量(基本量500)</span>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="changeQtyUnit(-1)" class="euro-btn w-8 h-8 flex items-center justify-center font-black bg-white">-</button>
+                        <span id="qty-display" class="min-w-[72px] text-center font-black text-sm text-gray-900">500 張</span>
+                        <button type="button" onclick="changeQtyUnit(1)" class="euro-btn w-8 h-8 flex items-center justify-center font-black bg-white">+</button>
+                    </div>
+                </div>
+
+                <div class="border-t border-orange-200 pt-2.5 space-y-1.5">
+                    <div class="flex items-center justify-between text-xs font-bold text-gray-600">
+                        <span>原價(百臉幫你抓版型):</span>
+                        <span id="price-original" class="text-sm font-black text-gray-800">$1,200</span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs font-extrabold text-orange-600">
+                        <span>我可以自己抓版型:</span>
+                        <span id="price-self" class="text-base font-black text-orange-600">$1,000</span>
+                    </div>
+                </div>
+            </div>
+
+            <button type="button" id="btn-confirm-order" onclick="handleConfirmProduction()" class="euro-btn-orange w-full py-2.5 font-extrabold text-sm tracking-wider">
+                確 認 製 作
+            </button>
+
+            <div class="text-[11px] font-bold text-gray-500 text-center leading-relaxed px-2">
+                ※ 請截圖此畫面私訊百臉 IG (@manyfaces2018) 討論後續製作細節！
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== 共用彈跳視窗 ==================== -->
+    <div id="custom-modal" class="hidden fixed inset-0 z-50 bg-black/50 items-center justify-center p-4">
+        <div class="euro-card w-full max-w-xs p-4 flex flex-col gap-3 bg-white">
+            <h3 id="modal-title" class="font-black text-base text-gray-900">提示</h3>
+            <p id="modal-message" class="text-xs font-bold text-gray-600 whitespace-pre-line leading-relaxed"></p>
+            <input id="modal-input" type="text" class="hidden w-full border-2 border-black rounded-lg px-3 py-2 text-sm font-bold focus:border-orange-500 outline-none" placeholder="">
+
+            <div id="modal-item-controls" class="hidden flex-col gap-2.5 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                <div id="modal-size-row" class="flex items-center justify-between">
+                    <span id="modal-size-label" class="text-xs font-bold text-gray-600">尺寸</span>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="adjustModalItemSize(-1)" class="euro-btn w-7 h-7 flex items-center justify-center font-bold bg-white">-</button>
+                        <span id="modal-size-val" class="text-xs font-black min-w-[44px] text-center">8 pt</span>
+                        <button type="button" onclick="adjustModalItemSize(1)" class="euro-btn w-7 h-7 flex items-center justify-center font-bold bg-white">+</button>
+                    </div>
+                </div>
+
+                <div id="modal-logo-dims" class="hidden flex-col gap-2">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-xs font-bold text-gray-600 shrink-0">寬度 (mm)</span>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" onclick="adjustModalLogoDim('w', -1)" class="euro-btn w-7 h-7 flex items-center justify-center font-bold bg-white">-</button>
+                            <input id="modal-logo-w" type="number" step="0.5" onchange="inputModalLogoDim()" class="w-14 border-2 border-black rounded-lg text-center font-bold text-xs h-7 outline-none">
+                            <button type="button" onclick="adjustModalLogoDim('w', 1)" class="euro-btn w-7 h-7 flex items-center justify-center font-bold bg-white">+</button>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-xs font-bold text-gray-600 shrink-0">高度 (mm)</span>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" onclick="adjustModalLogoDim('h', -1)" class="euro-btn w-7 h-7 flex items-center justify-center font-bold bg-white">-</button>
+                            <input id="modal-logo-h" type="number" step="0.5" onchange="inputModalLogoDim()" class="w-14 border-2 border-black rounded-lg text-center font-bold text-xs h-7 outline-none">
+                            <button type="button" onclick="adjustModalLogoDim('h', 1)" class="euro-btn w-7 h-7 flex items-center justify-center font-bold bg-white">+</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="modal-font-row" class="hidden flex-col gap-1.5 pt-1 border-t border-gray-200">
+                    <span class="text-xs font-bold text-gray-600">字體</span>
+                    <div class="grid grid-cols-3 gap-1.5">
+                        <button type="button" data-font="Noto Sans TC" onclick="selectModalItemFont('Noto Sans TC')" class="item-font-btn euro-btn py-1.5 px-1 text-[11px] font-bold bg-white" style="font-family:'Noto Sans TC', sans-serif;">思源黑體</button>
+                        <button type="button" data-font="Noto Serif TC" onclick="selectModalItemFont('Noto Serif TC')" class="item-font-btn euro-btn py-1.5 px-1 text-[11px] font-bold bg-white" style="font-family:'Noto Serif TC', serif;">思源宋體</button>
+                        <button type="button" data-font="Huninn" onclick="selectModalItemFont('Huninn')" class="item-font-btn euro-btn py-1.5 px-1 text-[11px] font-bold bg-white" style="font-family:'Huninn', sans-serif;">粉圓體</button>
+                    </div>
+                </div>
+
+                <div id="modal-color-row" class="hidden flex-col gap-1.5 pt-1 border-t border-gray-200">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <span class="text-xs font-bold text-gray-600">顏色</span>
+                            <span id="modal-item-color-preview" class="w-4 h-4 rounded border border-black inline-block shrink-0" style="background:#000000;" title="目前顏色預覽"></span>
+                        </div>
+                        <div class="flex items-center gap-1.5 flex-wrap justify-end">
+                            <button type="button" data-color="#ffffff" onclick="selectModalItemBaseColor('#ffffff')" class="item-color-swatch w-5 h-5 rounded-full border border-gray-400 transition-transform" style="background:#ffffff;" title="白色"></button>
+                            <button type="button" data-color="#000000" onclick="selectModalItemBaseColor('#000000')" class="item-color-swatch w-5 h-5 rounded-full border border-gray-400 transition-transform" style="background:#000000;" title="黑色"></button>
+                            <button type="button" data-color="#e78f9b" onclick="selectModalItemBaseColor('#e78f9b')" class="item-color-swatch w-5 h-5 rounded-full border border-gray-400 transition-transform" style="background:#e78f9b;" title="#e78f9b"></button>
+                            <button type="button" data-color="#dfa977" onclick="selectModalItemBaseColor('#dfa977')" class="item-color-swatch w-5 h-5 rounded-full border border-gray-400 transition-transform" style="background:#dfa977;" title="#dfa977"></button>
+                            <button type="button" data-color="#aecee0" onclick="selectModalItemBaseColor('#aecee0')" class="item-color-swatch w-5 h-5 rounded-full border border-gray-400 transition-transform" style="background:#aecee0;" title="#aecee0"></button>
+                            <button type="button" data-color="#96d074" onclick="selectModalItemBaseColor('#96d074')" class="item-color-swatch w-5 h-5 rounded-full border border-gray-400 transition-transform" style="background:#96d074;" title="#96d074"></button>
+                            <button type="button" data-color="#b47ea8" onclick="selectModalItemBaseColor('#b47ea8')" class="item-color-swatch w-5 h-5 rounded-full border border-gray-400 transition-transform" style="background:#b47ea8;" title="#b47ea8"></button>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between gap-1.5">
+                        <span class="text-[11px] font-bold text-gray-600 shrink-0">變深</span>
+                        <button type="button" onclick="adjustModalItemLightness(-1)" title="變深 1" class="euro-btn w-6 h-6 shrink-0 flex items-center justify-center font-black text-[10px] bg-white active:bg-orange-200">▼</button>
+                        <input id="modal-item-lightness" type="range" min="0" max="100" value="0" oninput="setModalItemLightness(this.value)" class="flex-1 min-w-0 accent-orange-500 cursor-pointer">
+                        <button type="button" onclick="adjustModalItemLightness(1)" title="變淺 1" class="euro-btn w-6 h-6 shrink-0 flex items-center justify-center font-black text-[10px] bg-white active:bg-orange-200">▲</button>
+                        <span class="text-[11px] font-bold text-gray-600 shrink-0">變淺</span>
+                    </div>
+                    <div class="text-[11px] font-bold text-orange-600">※ 螢幕色與實際印刷會有些許色差(5-18%)</div>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-gray-600">旋轉角度</span>
+                    <button type="button" onclick="rotateModalItem()" class="euro-btn px-2.5 py-1 text-xs font-bold bg-white">↻ 旋轉 90°</button>
+                </div>
+                <button type="button" onclick="deleteModalItem()" class="mt-1 text-xs font-bold text-red-500 border border-red-300 rounded-lg py-1 bg-red-50">🗑️ 刪除此物件</button>
+            </div>
+
+            <div id="modal-bg-controls" class="hidden flex-col gap-2.5 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <span class="text-xs font-bold text-gray-600">背景顏色</span>
+                        <span id="modal-bg-color-preview" class="w-4 h-4 rounded border border-black inline-block shrink-0" style="background:#ffffff;" title="目前背景顏色預覽"></span>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-wrap justify-end">
+                        <button type="button" data-color="#ffffff" onclick="selectCardBgBaseColor('#ffffff')" class="bg-color-swatch w-5 h-5 rounded-full border border-gray-400 transition-transform" style="background:#ffffff;" title="白色"></button>
+                        <button type="button" data-color="#e7bbc1" onclick="selectCardBgBaseColor('#e7bbc1')" class="bg-color-swatch w-5 h-5 rounded-full border border-gray-400 transition-transform" style="background:#e7bbc1;" title="#e7bbc1"></button>
+                        <button type="button" data-color="#dfc4ab" onclick="selectCardBgBaseColor('#dfc4ab')" class="bg-color-swatch w-5 h-5 rounded-full border border-gray-400 transition-transform" style="background:#dfc4ab;" title="#dfc4ab"></button>
+                        <button type="button" data-color="#c7d7e0" onclick="selectCardBgBaseColor('#c7d7e0')" class="bg-color-swatch w-5 h-5 rounded-full border border-gray-400 transition-transform" style="background:#c7d7e0;" title="#c7d7e0"></button>
+                        <button type="button" data-color="#b3d0a2" onclick="selectCardBgBaseColor('#b3d0a2')" class="bg-color-swatch w-5 h-5 rounded-full border border-gray-400 transition-transform" style="background:#b3d0a2;" title="#b3d0a2"></button>
+                        <button type="button" data-color="#b499ae" onclick="selectCardBgBaseColor('#b499ae')" class="bg-color-swatch w-5 h-5 rounded-full border border-gray-400 transition-transform" style="background:#b499ae;" title="#b499ae"></button>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between gap-1.5">
+                    <span class="text-[11px] font-bold text-gray-600 shrink-0">變深</span>
+                    <button type="button" onclick="adjustCardBgLightness(-1)" title="變深 1" class="euro-btn w-6 h-6 shrink-0 flex items-center justify-center font-black text-[10px] bg-white active:bg-orange-200">▼</button>
+                    <input id="modal-bg-lightness" type="range" min="0" max="100" value="100" oninput="setCardBgLightness(this.value)" class="flex-1 min-w-0 accent-orange-500 cursor-pointer">
+                    <button type="button" onclick="adjustCardBgLightness(1)" title="變淺 1" class="euro-btn w-6 h-6 shrink-0 flex items-center justify-center font-black text-[10px] bg-white active:bg-orange-200">▲</button>
+                    <span class="text-[11px] font-bold text-gray-600 shrink-0">變淺</span>
+                </div>
+                <div class="text-[11px] font-bold text-orange-600">※ 螢幕色與實際印刷會有些許色差(5-18%)</div>
+            </div>
+
+            <div id="modal-hole-controls" class="hidden flex-col gap-2.5 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-gray-600">兩耳孔距 (mm)</span>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="adjustHoleSpacing(-1)" class="euro-btn w-7 h-7 flex items-center justify-center font-bold bg-white">-</button>
+                        <span id="modal-hole-dist-val" class="text-xs font-black min-w-[48px] text-center">20 mm</span>
+                        <button type="button" onclick="adjustHoleSpacing(1)" class="euro-btn w-7 h-7 flex items-center justify-center font-bold bg-white">+</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-2 mt-1">
+                <button type="button" id="modal-cancel-btn" onclick="closeCustomModal()" class="hidden euro-btn flex-1 py-2 text-xs font-extrabold bg-gray-100">取消</button>
+                <button type="button" id="modal-confirm-btn" onclick="confirmCustomModal()" class="euro-btn-orange flex-1 py-2 text-xs font-extrabold">確定</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== 全域常數與版型定義 ====================
+        // ★ 請將部署好的 Google Apps Script「網頁應用程式網址」貼在下方引號內
+        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycby5QwGGqG91vHcaNxftoNIbJbaEXKJ-9QxKIRejCsU75crtYh58UJMFnKw9Vko0pRTZkA/exec";
+        const PX_PER_MM = 3.2;
+
+        // 貼耳: 45x54, 80x27, 40x30
+        // 垂墜: 90x54, 54x54, 80x80
+        // 都有: 54x54, 70x54
+        const PRESET_TEMPLATES = [
+            { id: '45x54', tag: '經典款', label: '45 x 54 mm', w: 54, h: 45, allowPortrait: true, styles: ['stud'] },
+            { id: '80x27', tag: '細長款', label: '80 x 27 mm', w: 80, h: 27, allowPortrait: false, styles: ['stud'] },
+            { id: '40x30', tag: '迷你款', label: '40 x 30 mm', w: 40, h: 30, allowPortrait: false, styles: ['stud'] },
+            { id: '90x54', tag: '名片款', label: '90 x 54 mm', w: 90, h: 54, allowPortrait: true, styles: ['drop'] },
+            { id: '54x54', tag: '方形款', label: '54 x 54 mm', w: 54, h: 54, allowPortrait: true, styles: ['drop', 'both'] },
+            { id: '80x80', tag: '大方款', label: '80 x 80 mm', w: 80, h: 80, allowPortrait: true, styles: ['drop'] },
+            { id: '70x54', tag: '適中款', label: '70 x 54 mm', w: 70, h: 54, allowPortrait: true, styles: ['both'] }
+        ];
+
+        const cardSettings = {};
+        PRESET_TEMPLATES.forEach(t => {
+            cardSettings[t.id] = {
+                orientation: 'landscape',
+                holeType: 'pin'
+            };
+        });
+
+        const state = {
+            userIg: '',
+            earringStyle: 'stud',
+            templateId: '45x54',
+            orientation: 'landscape',
+            holeType: 'pin',
+            cardW: 54,
+            cardH: 45,
+            cardBg: '#ffffff',
+            cardBgBase: '#ffffff',
+            cardBgLightness: 100,
+            selectedCustomIdx: -1,
+            selectedHoleIdx: -1,
+            hasTagHole: false,
+            showEarringPreview: true,
+            holes: [],
+            customItems: [],
+            material: 'coated',
+            qtyStep: 0
+        };
+
+        // 第三關操作歷史紀錄（供「上一個動作」復原使用）
+        let step3History = [];
+
+        function getStep3Snapshot() {
+            return JSON.stringify({
+                cardW: state.cardW,
+                cardH: state.cardH,
+                cardBg: state.cardBg,
+                cardBgBase: state.cardBgBase,
+                cardBgLightness: state.cardBgLightness,
+                hasTagHole: state.hasTagHole,
+                holes: state.holes,
+                customItems: state.customItems
+            });
+        }
+
+        function pushStep3History() {
+            const snap = getStep3Snapshot();
+            if (step3History.length > 0 && step3History[step3History.length - 1] === snap) return;
+            step3History.push(snap);
+            if (step3History.length > 30) step3History.shift();
+        }
+
+        function updateEarringEyeIcon() {
+            const svg = document.getElementById('icon-earring-eye');
+            if (!svg) return;
+            if (state.showEarringPreview) {
+                svg.setAttribute('stroke', '#111111');
+                svg.innerHTML = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>`;
+            } else {
+                svg.setAttribute('stroke', '#111111');
+                svg.innerHTML = `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"></path><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"></path><line x1="1" y1="1" x2="23" y2="23"></line>`;
+            }
+        }
+
+        function toggleEarringPreview() {
+            state.showEarringPreview = !state.showEarringPreview;
+            updateEarringEyeIcon();
+            renderStep3Items();
+        }
+
+        function undoStep3Action() {
+            if (step3History.length === 0) return;
+            const prev = JSON.parse(step3History.pop());
+            state.cardW = prev.cardW;
+            state.cardH = prev.cardH;
+            state.cardBg = prev.cardBg;
+            state.cardBgBase = prev.cardBgBase;
+            state.cardBgLightness = prev.cardBgLightness;
+            state.hasTagHole = prev.hasTagHole;
+            state.holes = prev.holes;
+            state.customItems = prev.customItems;
+            state.selectedCustomIdx = -1;
+            state.selectedHoleIdx = -1;
+            document.querySelectorAll('input[name="tag-hole-opt"]').forEach(r => {
+                r.checked = (r.value === (state.hasTagHole ? 'yes' : 'no'));
+            });
+            renderStep3Scene();
+        }
+
+        function resetStep3ToDefault() {
+            pushStep3History();
+            const t = PRESET_TEMPLATES.find(item => item.id === state.templateId);
+            if (t) {
+                const isLand = state.orientation === 'landscape';
+                state.cardW = isLand ? Math.max(t.w, t.h) : Math.min(t.w, t.h);
+                state.cardH = isLand ? Math.min(t.w, t.h) : Math.max(t.w, t.h);
+            }
+            state.holes = computeDefaultHoles(state.templateId, state.orientation, state.holeType, state.cardW, state.cardH);
+            state.customItems = [];
+            state.hasTagHole = false;
+            state.showEarringPreview = true;
+            state.cardBg = '#ffffff';
+            state.cardBgBase = '#ffffff';
+            state.cardBgLightness = 100;
+            state.selectedCustomIdx = -1;
+            state.selectedHoleIdx = -1;
+            document.querySelectorAll('input[name="tag-hole-opt"]').forEach(r => {
+                r.checked = (r.value === 'no');
+            });
+            updateEarringEyeIcon();
+            renderStep3Scene();
+        }
+
+        // ==================== 色票明度換算工具 ====================
+        function hexToHsl(hex) {
+            let hStr = (hex || '#000000').replace('#', '');
+            if (hStr.length === 3) hStr = hStr.split('').map(c => c + c).join('');
+            const r = parseInt(hStr.substring(0, 2), 16) / 255;
+            const g = parseInt(hStr.substring(2, 4), 16) / 255;
+            const b = parseInt(hStr.substring(4, 6), 16) / 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let h = 0, s = 0, l = (max + min) / 2;
+            if (max !== min) {
+                const d = max - min;
+                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                switch (max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    case b: h = (r - g) / d + 4; break;
+                }
+                h /= 6;
+            }
+            return { h: h * 360, s: s * 100, l: l * 100 };
+        }
+
+        function hslToHex(h, s, l) {
+            const sNorm = s / 100;
+            const lNorm = l / 100;
+            const c = (1 - Math.abs(2 * lNorm - 1)) * sNorm;
+            const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+            const m = lNorm - c / 2;
+            let r = 0, g = 0, b = 0;
+            if (h >= 0 && h < 60) { r = c; g = x; b = 0; }
+            else if (h >= 60 && h < 120) { r = x; g = c; b = 0; }
+            else if (h >= 120 && h < 180) { r = 0; g = c; b = x; }
+            else if (h >= 180 && h < 240) { r = 0; g = x; b = c; }
+            else if (h >= 240 && h < 300) { r = x; g = 0; b = c; }
+            else { r = c; g = 0; b = x; }
+            const toHex = v => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+            return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+        }
+
+        // ==================== 繪製藍色耳針 / 耳夾刀模 SVG ====================
+        function createHoleSVG(holeType) {
+            if (holeType === 'pin') {
+                const r = 0.75 * PX_PER_MM; // 1.5mm 直徑耳針孔
+                const d = r * 2 + 4;
+                const c = d / 2;
+                return `<svg width="${d}" height="${d}" class="overflow-visible pointer-events-none absolute" style="left:0; top:0; transform:translate(-50%, -50%);">
+                    <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="#00a0e9" stroke-width="1"/>
+                </svg>`;
+            } else {
+                // 依照指定 Illustrator SVG 路徑繪製耳夾刀模 (1pt = 25.4/72 mm，上孔中心對齊 y = -8.25mm)
+                const ptToPx = (25.4 / 72) * PX_PER_MM;
+                const topHoleOffsetPt = 8.25 / (25.4 / 72);
+                const anchorY = 405.5 + topHoleOffsetPt;
+                return `<svg width="2" height="2" class="overflow-visible pointer-events-none absolute" style="left:0; top:0;">
+                    <g transform="scale(${ptToPx}) translate(-299, -${anchorY.toFixed(3)})" fill="none" stroke="#00A0E9" stroke-width="0.75" stroke-miterlimit="10">
+                        <path d="M300.8,405.5c0,1-0.8,1.8-1.8,1.8s-1.8-0.8-1.8-1.8c0-1,0.8-1.8,1.8-1.8S300.8,404.5,300.8,405.5z"/>
+                        <path d="M300.8,426.4c0,1-0.8,1.8-1.8,1.8s-1.8-0.8-1.8-1.8s0.8-1.8,1.8-1.8S300.8,425.4,300.8,426.4z"/>
+                        <path d="M287.7,438.8v-15.5c0-2.8,1.3-5.3,3.3-7.1c2.1-1.8,4.9-2.9,8-2.9l0,0l0,0c3.1,0,6,1.1,8,2.9c2.1,1.8,3.3,4.3,3.3,7.1v15.5"/>
+                    </g>
+                </svg>`;
+            }
+        }
+
+        function getFontFamilyCSS(fontKey) {
+            if (fontKey === 'Noto Serif TC') return "'Noto Serif TC', serif";
+            if (fontKey === 'Huninn') return "'Huninn', sans-serif";
+            return "'Noto Sans TC', sans-serif";
+        }
+
+        // ==================== 繪製橘色半透明耳環預覽圖 ====================
+        function createOrangeEarringHTML() {
+            if (state.holeType === 'clip') {
+                // 選擇耳夾：一律顯示 33mm 波浪垂墜耳環 (上方 3mm 圓對齊最高點空心圓 + 下方 30mm 波浪紋，振幅 3mm)
+                const topHoleY_px = -8.25 * PX_PER_MM;
+                const topR = 1.5 * PX_PER_MM; // 3mm 直徑 -> 1.5mm 半徑
+                const waveLen = 30 * PX_PER_MM;
+                const amp = 3 * PX_PER_MM; // 振幅 3mm
+                const svgW = (amp * 2) + 8;
+                const cx = svgW / 2;
+                const startY = topR * 2;
+                const segH = waveLen / 4; // 4 個波段共 30mm
+
+                const wavePath = `M ${cx} ${startY} ` +
+                    `Q ${cx + amp} ${startY + segH * 0.5}, ${cx} ${startY + segH} ` +
+                    `Q ${cx - amp} ${startY + segH * 1.5}, ${cx} ${startY + segH * 2} ` +
+                    `Q ${cx + amp} ${startY + segH * 2.5}, ${cx} ${startY + segH * 3} ` +
+                    `Q ${cx - amp} ${startY + segH * 3.5}, ${cx} ${startY + segH * 4}`;
+
+                return `<svg width="${svgW}" height="${topR * 2 + waveLen}" class="overflow-visible pointer-events-none absolute"
+                             style="left:0; top:${topHoleY_px}px; transform:translate(-50%, -${topR}px);">
+                    <circle cx="${cx}" cy="${topR}" r="${topR}" fill="rgba(251,146,60,0.5)" stroke="rgba(249,115,22,0.85)" stroke-width="1.2"/>
+                    <path d="${wavePath}" fill="none" stroke="rgba(249,115,22,0.85)" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>`;
+            } else {
+                // 選擇耳針：一律顯示圓形耳環
+                const d = 12 * PX_PER_MM;
+                return `<div class="absolute pointer-events-none rounded-full bg-orange-400/40 border border-orange-500/60"
+                             style="width:${d}px; height:${d}px; left:0; top:0; transform:translate(-50%, -50%);"></div>`;
+            }
+        }
+
+        // ==================== 各尺寸專屬預設孔位計算 ====================
+        function computeDefaultHoles(templateId, orientation, holeType, w_mm, h_mm) {
+            const centerX = w_mm / 2;
+
+            if (templateId === '45x54') {
+                const isLand = (orientation === 'landscape');
+                const dist = isLand ? 23 : 20;
+                const y = (holeType === 'pin') ? 15 : 18;
+                return [
+                    { id: 1, x: Number((centerX - dist / 2).toFixed(2)), y: y },
+                    { id: 2, x: Number((centerX + dist / 2).toFixed(2)), y: y }
+                ];
+            }
+
+            if (templateId === '80x27') {
+                const y = (holeType === 'pin') ? 13.5 : 15;
+                return [
+                    { id: 1, x: 48, y: y },
+                    { id: 2, x: 64, y: y }
+                ];
+            }
+
+            if (templateId === '40x30') {
+                const dist = 16;
+                const y = (holeType === 'pin') ? 13 : 15;
+                return [
+                    { id: 1, x: Number((centerX - dist / 2).toFixed(2)), y: y },
+                    { id: 2, x: Number((centerX + dist / 2).toFixed(2)), y: y }
+                ];
+            }
+
+            if (templateId === '90x54' || templateId === '70x54') {
+                const isLand = (orientation === 'landscape');
+                const dist = isLand ? 25 : 22;
+                let y = 20;
+                if (holeType === 'pin') {
+                    y = isLand ? 20 : 13;
+                } else {
+                    y = 21;
+                }
+                return [
+                    { id: 1, x: Number((centerX - dist / 2).toFixed(2)), y: y },
+                    { id: 2, x: Number((centerX + dist / 2).toFixed(2)), y: y }
+                ];
+            }
+
+            if (templateId === '54x54') {
+                const dist = 25;
+                const y = 20;
+                return [
+                    { id: 1, x: Number((centerX - dist / 2).toFixed(2)), y: y },
+                    { id: 2, x: Number((centerX + dist / 2).toFixed(2)), y: y }
+                ];
+            }
+
+            if (templateId === '80x80') {
+                const dist = (holeType === 'pin') ? 25 : 28;
+                const y = 25;
+                return [
+                    { id: 1, x: Number((centerX - dist / 2).toFixed(2)), y: y },
+                    { id: 2, x: Number((centerX + dist / 2).toFixed(2)), y: y }
+                ];
+            }
+
+            return [
+                { id: 1, x: Number((centerX - 10).toFixed(2)), y: 15 },
+                { id: 2, x: Number((centerX + 10).toFixed(2)), y: 15 }
+            ];
+        }
+
+        // ==================== 頁面切換控制 ====================
+        function showStep(stepNum) {
+            recordAnalyticsStepChange(stepNum);
+            ['step1', 'step2', 'step3', 'step4', 'step5'].forEach((id, idx) => {
+                const el = document.getElementById(id);
+                if (idx + 1 === stepNum) {
+                    el.classList.remove('hidden');
+                    el.classList.add('flex');
+                } else {
+                    el.classList.add('hidden');
+                    el.classList.remove('flex');
+                }
+            });
+        }
+
+        function selectEarringStyle(style) {
+            const igInput = document.getElementById('input-user-ig');
+            const igVal = igInput ? igInput.value.trim() : '';
+            if (!igVal) {
+                openCustomModal({
+                    title: '請先輸入 IG 帳號',
+                    message: '請輸入您的 IG 帳號，若無請輸入 fun。',
+                    showInput: false,
+                    onConfirm: () => { if (igInput) igInput.focus(); }
+                });
+                return;
+            }
+            state.userIg = igVal;
+            state.earringStyle = style;
+            renderStep2Carousel();
+            showStep(2);
+        }
+
+        function backToStep1() { showStep(1); }
+        function backToStep2() { showStep(2); }
+        function backToStep3() {
+            showStep(3);
+            setTimeout(renderStep3Scene, 30);
+        }
+        function backToStep4() { showStep(4); }
+
+        function scrollStep2Carousel(dir) {
+            const carousel = document.getElementById('step2-carousel');
+            if (!carousel) return;
+            carousel.scrollBy({ left: dir * 300, behavior: 'smooth' });
+        }
+
+        // 電腦版第二關支援滑鼠滾輪與按住拖曳左右切換版型
+        (function initStep2DesktopScroll() {
+            const carousel = document.getElementById('step2-carousel');
+            if (!carousel) return;
+
+            carousel.addEventListener('wheel', (e) => {
+                if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                    e.preventDefault();
+                    carousel.scrollLeft += e.deltaY;
+                }
+            }, { passive: false });
+
+            let isDown = false;
+            let startX = 0;
+            let scrollLeft = 0;
+
+            carousel.addEventListener('mousedown', (e) => {
+                if (e.target.closest('button, input, label')) return;
+                isDown = true;
+                carousel.classList.add('cursor-grabbing');
+                carousel.classList.remove('cursor-grab');
+                carousel.style.scrollSnapType = 'none';
+                startX = e.pageX - carousel.offsetLeft;
+                scrollLeft = carousel.scrollLeft;
+            });
+
+            const stopDrag = () => {
+                if (!isDown) return;
+                isDown = false;
+                carousel.classList.remove('cursor-grabbing');
+                carousel.classList.add('cursor-grab');
+                carousel.style.scrollSnapType = '';
+            };
+
+            carousel.addEventListener('mouseleave', stopDrag);
+            window.addEventListener('mouseup', stopDrag);
+
+            carousel.addEventListener('mousemove', (e) => {
+                if (!isDown) return;
+                e.preventDefault();
+                const x = e.pageX - carousel.offsetLeft;
+                const walk = (x - startX) * 1.2;
+                carousel.scrollLeft = scrollLeft - walk;
+            });
+        })();
+
+        // ==================== 第二關：渲染公版卡片輪播 ====================
+        function renderStep2Carousel() {
+            const container = document.getElementById('step2-carousel');
+            const availableTemplates = PRESET_TEMPLATES.filter(t => t.styles.includes(state.earringStyle));
+
+            container.innerHTML = availableTemplates.map(t => {
+                const cfg = cardSettings[t.id];
+                if (!t.allowPortrait) cfg.orientation = 'landscape';
+
+                const isLand = cfg.orientation === 'landscape';
+                const w_mm = isLand ? Math.max(t.w, t.h) : Math.min(t.w, t.h);
+                const h_mm = isLand ? Math.min(t.w, t.h) : Math.max(t.w, t.h);
+                const holes = computeDefaultHoles(t.id, cfg.orientation, cfg.holeType, w_mm, h_mm);
+
+                const previewScale = Math.min(180 / (w_mm * PX_PER_MM), 160 / (h_mm * PX_PER_MM), 1);
+                const pxW = w_mm * PX_PER_MM;
+                const pxH = h_mm * PX_PER_MM;
+
+                const holesHTML = holes.map(h => `
+                    <div class="absolute" style="left:${h.x * PX_PER_MM}px; top:${h.y * PX_PER_MM}px;">
+                        ${createHoleSVG(cfg.holeType)}
+                    </div>
+                `).join('');
+
+                return `
+                <div class="snap-center shrink-0 w-[280px] flex flex-col gap-3">
+                    <div class="euro-card p-4 flex flex-col">
+                        <div class="flex items-center justify-between border-b-2 border-black pb-2 mb-3">
+                            <span class="bg-black text-white text-[11px] font-extrabold px-2 py-0.5 rounded">${t.tag}</span>
+                            <span class="font-black text-sm">${t.label}</span>
+                        </div>
+
+                        <div class="w-full h-[185px] bg-gray-50 border border-dashed border-gray-300 rounded-xl flex items-center justify-center overflow-hidden mb-3">
+                            <div style="transform: scale(${previewScale}); transform-origin: center;">
+                                <div class="bg-white relative shadow-sm" style="width:${pxW}px; height:${pxH}px; border: 0.75pt solid #000000;">
+                                    ${holesHTML}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2 text-xs">
+                            <div class="text-gray-500 font-bold">直橫切換</div>
+                            <div class="flex items-center gap-4">
+                                <label class="flex items-center gap-1.5 cursor-pointer">
+                                    <input type="radio" name="ori-${t.id}" ${cfg.orientation === 'landscape' ? 'checked' : ''} onchange="updateStep2Card('${t.id}', 'orientation', 'landscape')">
+                                    <span class="font-bold">橫式</span>
+                                </label>
+                                <label class="flex items-center gap-1.5 ${t.allowPortrait ? 'cursor-pointer' : 'opacity-40 cursor-not-allowed'}">
+                                    <input type="radio" name="ori-${t.id}" ${cfg.orientation === 'portrait' ? 'checked' : ''} ${t.allowPortrait ? '' : 'disabled'} onchange="updateStep2Card('${t.id}', 'orientation', 'portrait')">
+                                    <span class="font-bold">直式</span>
+                                </label>
+                            </div>
+
+                            <div class="text-gray-500 font-bold pt-1">打孔設定</div>
+                            <div class="flex items-center gap-4">
+                                <label class="flex items-center gap-1.5 cursor-pointer">
+                                    <input type="radio" name="hole-${t.id}" ${cfg.holeType === 'pin' ? 'checked' : ''} onchange="updateStep2Card('${t.id}', 'holeType', 'pin')">
+                                    <span class="font-bold">耳針孔</span>
+                                </label>
+                                <label class="flex items-center gap-1.5 cursor-pointer">
+                                    <input type="radio" name="hole-${t.id}" ${cfg.holeType === 'clip' ? 'checked' : ''} onchange="updateStep2Card('${t.id}', 'holeType', 'clip')">
+                                    <span class="font-bold">耳夾孔</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="button" onclick="chooseTemplate('${t.id}')" class="euro-btn-orange w-full py-2.5 font-extrabold text-sm">
+                        選擇此版型 →
+                    </button>
+                </div>`;
+            }).join('');
+        }
+
+        function updateStep2Card(templateId, key, val) {
+            cardSettings[templateId][key] = val;
+            renderStep2Carousel();
+        }
+
+        function chooseTemplate(templateId) {
+            const t = PRESET_TEMPLATES.find(item => item.id === templateId);
+            const cfg = cardSettings[templateId];
+            state.templateId = templateId;
+            state.orientation = cfg.orientation;
+            state.holeType = cfg.holeType;
+
+            const isLand = cfg.orientation === 'landscape';
+            state.cardW = isLand ? Math.max(t.w, t.h) : Math.min(t.w, t.h);
+            state.cardH = isLand ? Math.min(t.w, t.h) : Math.max(t.w, t.h);
+
+            state.holes = computeDefaultHoles(templateId, state.orientation, state.holeType, state.cardW, state.cardH);
+            state.customItems = [];
+            state.hasTagHole = false;
+            state.showEarringPreview = true;
+            state.cardBg = '#ffffff';
+            state.cardBgBase = '#ffffff';
+            state.cardBgLightness = 100;
+            state.selectedCustomIdx = -1;
+            state.selectedHoleIdx = -1;
+            step3History = [];
+
+            document.getElementById('input-card-w').value = state.cardW;
+            document.getElementById('input-card-h').value = state.cardH;
+            document.querySelectorAll('input[name="tag-hole-opt"]').forEach(r => {
+                r.checked = (r.value === 'no');
+            });
+            updateEarringEyeIcon();
+
+            showStep(3);
+            setTimeout(renderStep3Scene, 30);
+        }
+
+        // ==================== 第三關：互動畫布與拖曳編輯 ====================
+        let currentStep3Scale = 1;
+
+        function showStep3Tip() {
+            const isDisplayingDrop = state.earringStyle === 'drop' || (state.earringStyle === 'both' && state.holeType === 'clip');
+            let msg = '1. 如何移動：點擊物件後會出現藍框，點擊耳卡內任何位置，即可移動。亦可直接拖曳。\n\n2. 如何移除藍框：點擊非耳卡的範圍。\n\n3. 如何細部調整：連擊2次物件。只有IG圖示與背景(BG)修改需要點擊左側圖示。';
+            if (isDisplayingDrop) {
+                msg += '\n\n(預覽之垂墜耳環全長設定為 33mm)';
+            }
+            openCustomModal({
+                title: '操作提示',
+                message: msg,
+                showInput: false,
+                onConfirm: null
+            });
+        }
+
+        function renderStep3Scene() {
+            document.getElementById('step3-title-size').innerText = `${state.cardW} x ${state.cardH} mm`;
+            document.getElementById('input-card-w').value = state.cardW;
+            document.getElementById('input-card-h').value = state.cardH;
+
+            const cardEl = document.getElementById('step3-card');
+            const cardPxW = state.cardW * PX_PER_MM;
+            const cardPxH = state.cardH * PX_PER_MM;
+            cardEl.style.width = `${cardPxW}px`;
+            cardEl.style.height = `${cardPxH}px`;
+            cardEl.style.backgroundColor = state.cardBg || '#ffffff';
+
+            const bgDot = document.getElementById('bg-btn-dot');
+            if (bgDot) bgDot.style.backgroundColor = state.cardBg || '#ffffff';
+
+            const canvasArea = document.getElementById('step3-canvas-area') || document.getElementById('step3-viewport');
+            const availW = Math.max(100, canvasArea.clientWidth - 16);
+            const availH = Math.max(140, canvasArea.clientHeight - 28);
+            currentStep3Scale = Math.min(1.35, availW / cardPxW, availH / cardPxH);
+            document.getElementById('step3-scale-wrapper').style.transform = `scale(${currentStep3Scale})`;
+
+            renderStep3Items();
+        }
+
+        function renderStep3Items() {
+            const layer = document.getElementById('step3-items-layer');
+            let html = '';
+
+            if (state.hasTagHole) {
+                const tagD = 5 * PX_PER_MM;
+                const tagX = (state.cardW / 2) * PX_PER_MM;
+                const tagY = 6 * PX_PER_MM;
+                html += `<div class="absolute pointer-events-none rounded-full border border-[#00a0e9]"
+                              style="width:${tagD}px; height:${tagD}px; left:${tagX}px; top:${tagY}px; transform:translate(-50%, -50%);"></div>`;
+            }
+
+            // 耳孔與橘色耳環預覽 (群組同心圓對齊，拖曳時一起移動)
+            state.holes.forEach((h, idx) => {
+                const leftPx = h.x * PX_PER_MM;
+                const topPx = h.y * PX_PER_MM;
+                const holeOutline = (state.selectedHoleIdx === idx)
+                    ? 'outline: 1pt dashed #00a0e9; outline-offset: 2px; cursor: move;'
+                    : '';
+                html += `
+                <div class="hole-item absolute cursor-pointer" data-idx="${idx}"
+                     style="left:${leftPx}px; top:${topPx}px; width:36px; height:36px; ${holeOutline} transform:translate(-50%, -50%);">
+                    <div class="relative w-full h-full pointer-events-none">
+                        <div class="absolute" style="left:50%; top:50%;">
+                            ${state.showEarringPreview ? createOrangeEarringHTML() : ''}
+                            ${createHoleSVG(state.holeType)}
+                        </div>
+                    </div>
+                </div>`;
+            });
+
+            // 客製化文字與 IG 圖示
+            state.customItems.forEach((item, idx) => {
+                const leftPx = item.x * PX_PER_MM;
+                const topPx = item.y * PX_PER_MM;
+                const selectedOutline = (state.selectedCustomIdx === idx)
+                    ? 'outline: 1pt dashed #00a0e9; outline-offset: 2px;'
+                    : '';
+                if (item.type === 'text') {
+                    const fontPx = item.size * (PX_PER_MM * 0.3527);
+                    const textColor = item.color || '#000000';
+                    const fontCss = getFontFamilyCSS(item.font);
+                    html += `
+                    <div class="custom-item absolute cursor-pointer whitespace-nowrap font-bold px-1"
+                         data-idx="${idx}"
+                         style="left:${leftPx}px; top:${topPx}px; font-size:${fontPx}px; font-family:${fontCss}; color:${textColor}; ${selectedOutline} transform:translate(-50%, -50%) rotate(${item.rotation}deg);">
+                        ${escapeHTML(item.text)}
+                    </div>`;
+                } else if (item.type === 'ig') {
+                    const sizePx = item.size * PX_PER_MM;
+                    const igColor = item.color || '#000000';
+                    html += `
+                    <div class="custom-item absolute cursor-pointer flex items-center justify-center"
+                         data-idx="${idx}"
+                         style="left:${leftPx}px; top:${topPx}px; width:${sizePx}px; height:${sizePx}px; ${selectedOutline} transform:translate(-50%, -50%) rotate(${item.rotation}deg);">
+                        <svg viewBox="0 0 24 24" class="w-full h-full pointer-events-none" fill="none" stroke="${igColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                            <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                            <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                        </svg>
+                    </div>`;
+                } else if (item.type === 'logo') {
+                    const wPx = item.w * PX_PER_MM;
+                    const hPx = item.h * PX_PER_MM;
+                    const fontSize = Math.max(7, Math.min(wPx * 0.24, hPx * 0.42, 14));
+                    html += `
+                    <div class="custom-item absolute cursor-pointer flex items-center justify-center font-black text-gray-700"
+                         data-idx="${idx}"
+                         style="left:${leftPx}px; top:${topPx}px; width:${wPx}px; height:${hPx}px; background-color:rgba(0,0,0,0.25); border-radius:5px; font-size:${fontSize}px; ${selectedOutline} transform:translate(-50%, -50%) rotate(${item.rotation}deg);">
+                        LOGO
+                    </div>`;
+                }
+            });
+
+            layer.innerHTML = html;
+            bindStep3Interactions();
+        }
+
+        function escapeHTML(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        // ==================== 輔助對齊線與 3mm 安全裁切線 ====================
+        function showAlignmentGuides(xMm, yMm, otherHoles, showSafeBorder) {
+            const guidesLayer = document.getElementById('guides-layer');
+            if (!guidesLayer) return;
+            let html = '';
+
+            // 垂直置中對齊線
+            if (Math.abs(xMm - state.cardW / 2) < 1.2) {
+                html += `<div class="absolute top-0 bottom-0 border-l border-dashed border-orange-400" style="left:${(state.cardW / 2) * PX_PER_MM}px;"></div>`;
+            }
+            // 水平置中對齊線
+            if (Math.abs(yMm - state.cardH / 2) < 1.2) {
+                html += `<div class="absolute left-0 right-0 border-t border-dashed border-orange-400" style="top:${(state.cardH / 2) * PX_PER_MM}px;"></div>`;
+            }
+            // 與其他耳孔對齊線
+            if (Array.isArray(otherHoles)) {
+                otherHoles.forEach(h => {
+                    if (Math.abs(xMm - h.x) < 1.2) {
+                        html += `<div class="absolute top-0 bottom-0 border-l border-dashed border-sky-400" style="left:${h.x * PX_PER_MM}px;"></div>`;
+                    }
+                    if (Math.abs(yMm - h.y) < 1.2) {
+                        html += `<div class="absolute left-0 right-0 border-t border-dashed border-sky-400" style="top:${h.y * PX_PER_MM}px;"></div>`;
+                    }
+                });
+            }
+            // 3mm 邊緣安全裁切線 (紅色虛線)
+            if (showSafeBorder) {
+                const insetPx = 3 * PX_PER_MM;
+                html += `<div class="absolute pointer-events-none" style="left:${insetPx}px; right:${insetPx}px; top:${insetPx}px; bottom:${insetPx}px; border: 1.5px dashed #ef4444;"></div>`;
+            }
+
+            guidesLayer.innerHTML = html;
+        }
+
+        function clearAlignmentGuides() {
+            const guidesLayer = document.getElementById('guides-layer');
+            if (guidesLayer) guidesLayer.innerHTML = '';
+        }
+
+        // 檢查物件外框是否進入卡片邊緣 3mm 內
+        function isItemNearEdge3mm(item, el) {
+            let halfW = 0;
+            let halfH = 0;
+            const isRotated90 = (Math.abs(item.rotation || 0) % 180) === 90;
+
+            if (item.type === 'ig') {
+                halfW = item.size / 2;
+                halfH = item.size / 2;
+            } else if (item.type === 'logo') {
+                const w = isRotated90 ? item.h : item.w;
+                const h = isRotated90 ? item.w : item.h;
+                halfW = w / 2;
+                halfH = h / 2;
+            } else if (item.type === 'text') {
+                const wMm = el ? (el.offsetWidth / PX_PER_MM) : (item.text.length * item.size * 0.25);
+                const hMm = el ? (el.offsetHeight / PX_PER_MM) : (item.size * 0.3527);
+                halfW = (isRotated90 ? hMm : wMm) / 2;
+                halfH = (isRotated90 ? wMm : hMm) / 2;
+            }
+
+            return (
+                (item.x - halfW) < 3 ||
+                (item.x + halfW) > (state.cardW - 3) ||
+                (item.y - halfH) < 3 ||
+                (item.y + halfH) > (state.cardH - 3)
+            );
+        }
+
+        // ==================== 第三關互動事件綁定 ====================
+        function updateCustomSelectionVisuals() {
+            document.querySelectorAll('.custom-item').forEach(el => {
+                const idx = Number(el.dataset.idx);
+                if (idx === state.selectedCustomIdx) {
+                    el.style.outline = '1pt dashed #00a0e9';
+                    el.style.outlineOffset = '2px';
+                    el.style.cursor = 'move';
+                } else {
+                    el.style.outline = 'none';
+                    el.style.outlineOffset = '0px';
+                    el.style.cursor = 'pointer';
+                }
+            });
+            document.querySelectorAll('.hole-item').forEach(el => {
+                const idx = Number(el.dataset.idx);
+                if (idx === state.selectedHoleIdx) {
+                    el.style.outline = '1pt dashed #00a0e9';
+                    el.style.outlineOffset = '2px';
+                    el.style.cursor = 'move';
+                } else {
+                    el.style.outline = 'none';
+                    el.style.outlineOffset = '0px';
+                    el.style.cursor = 'pointer';
+                }
+            });
+        }
+
+        function bindStep3Interactions() {
+            // 同步更新兩顆耳孔 DOM 位置
+            const syncAllHoleElements = () => {
+                state.holes.forEach((h, i) => {
+                    const el = document.querySelector(`.hole-item[data-idx="${i}"]`);
+                    if (el) {
+                        el.style.left = `${h.x * PX_PER_MM}px`;
+                        el.style.top = `${h.y * PX_PER_MM}px`;
+                    }
+                });
+            };
+
+            // 兩顆耳孔對稱連動位移 (保持相同高度與孔距，且不超出邊界 3mm)
+            const moveHolesPairByDelta = (origHoles, dx, dy) => {
+                const minOrigX = Math.min(...origHoles.map(h => h.x));
+                const maxOrigX = Math.max(...origHoles.map(h => h.x));
+                const minOrigY = Math.min(...origHoles.map(h => h.y));
+                const maxOrigY = Math.max(...origHoles.map(h => h.y));
+
+                let clampedDx = Math.max(3 - minOrigX, Math.min((state.cardW - 3) - maxOrigX, dx));
+                let clampedDy = Math.max(3 - minOrigY, Math.min((state.cardH - 3) - maxOrigY, dy));
+
+                // 兩耳中點輕微吸附卡片水平／垂直中心
+                const midX = (minOrigX + maxOrigX) / 2 + clampedDx;
+                const midY = (minOrigY + maxOrigY) / 2 + clampedDy;
+                if (Math.abs(midX - state.cardW / 2) < 1) {
+                    clampedDx += (state.cardW / 2) - midX;
+                }
+                if (Math.abs(midY - state.cardH / 2) < 1) {
+                    clampedDy += (state.cardH / 2) - midY;
+                }
+
+                origHoles.forEach((oh, i) => {
+                    state.holes[i].x = Number((oh.x + clampedDx).toFixed(2));
+                    state.holes[i].y = Number((oh.y + clampedDy).toFixed(2));
+                });
+                syncAllHoleElements();
+                return {
+                    midX: Number(((minOrigX + maxOrigX) / 2 + clampedDx).toFixed(2)),
+                    midY: Number(((minOrigY + maxOrigY) / 2 + clampedDy).toFixed(2))
+                };
+            };
+
+            const viewportEl = document.getElementById('step3-viewport');
+            if (viewportEl && !viewportEl.dataset.deselectBound) {
+                viewportEl.dataset.deselectBound = '1';
+                viewportEl.addEventListener('pointerdown', (e) => {
+                    if (e.target.closest('.custom-item') || e.target.closest('.hole-item') || e.target.closest('button')) return;
+                    const cardEl = document.getElementById('step3-card');
+                    const clickedInsideCard = cardEl && e.target.closest('#step3-card');
+
+                    // 若已有選取物件且點擊卡片內任意位置，直接將該物件移動至點擊位置
+                    if (clickedInsideCard && (state.selectedCustomIdx !== -1 || state.selectedHoleIdx !== -1)) {
+                        const rect = cardEl.getBoundingClientRect();
+                        const clickX = (e.clientX - rect.left) / (PX_PER_MM * currentStep3Scale);
+                        const clickY = (e.clientY - rect.top) / (PX_PER_MM * currentStep3Scale);
+
+                        if (state.selectedHoleIdx !== -1 && state.holes[state.selectedHoleIdx]) {
+                            pushStep3History();
+                            const hIdx = state.selectedHoleIdx;
+                            const origHoles = state.holes.map(h => ({ x: h.x, y: h.y }));
+                            const dx = clickX - origHoles[hIdx].x;
+                            const dy = clickY - origHoles[hIdx].y;
+                            moveHolesPairByDelta(origHoles, dx, dy);
+                            clearAlignmentGuides();
+                            return;
+                        }
+
+                        if (state.selectedCustomIdx !== -1 && state.customItems[state.selectedCustomIdx]) {
+                            pushStep3History();
+                            const cIdx = state.selectedCustomIdx;
+                            const item = state.customItems[cIdx];
+                            const newX = Math.max(0, Math.min(state.cardW, clickX));
+                            const newY = Math.max(0, Math.min(state.cardH, clickY));
+                            item.x = Number(newX.toFixed(2));
+                            item.y = Number(newY.toFixed(2));
+                            const itemEl = document.querySelector(`.custom-item[data-idx="${cIdx}"]`);
+                            if (itemEl) {
+                                itemEl.style.left = `${item.x * PX_PER_MM}px`;
+                                itemEl.style.top = `${item.y * PX_PER_MM}px`;
+                            }
+                            if (isItemNearEdge3mm(item, itemEl)) {
+                                showAlignmentGuides(item.x, item.y, state.holes, true);
+                                openCustomModal({
+                                    title: '裁切安全提醒',
+                                    message: '重要圖文請勿靠近邊緣',
+                                    showInput: false,
+                                    onConfirm: () => clearAlignmentGuides()
+                                });
+                            } else {
+                                clearAlignmentGuides();
+                            }
+                            return;
+                        }
+                    }
+
+                    if (state.selectedCustomIdx !== -1 || state.selectedHoleIdx !== -1) {
+                        state.selectedCustomIdx = -1;
+                        state.selectedHoleIdx = -1;
+                        updateCustomSelectionVisuals();
+                    }
+                });
+            }
+
+            // 耳孔：點一下選取顯示藍色虛線 1pt 外框後可兩耳對稱拖曳，雙擊可調整兩耳孔距
+            document.querySelectorAll('.hole-item').forEach(el => {
+                const idx = Number(el.dataset.idx);
+                let isDragging = false;
+                let hasMoved = false;
+                let wasAlreadySelected = false;
+                let startX = 0, startY = 0;
+                let origHoles = [];
+                let lastTap = 0;
+
+                el.addEventListener('pointerdown', (e) => {
+                    e.stopPropagation();
+                    wasAlreadySelected = (state.selectedHoleIdx === idx);
+
+                    if (!wasAlreadySelected) {
+                        state.selectedHoleIdx = idx;
+                        state.selectedCustomIdx = -1;
+                        updateCustomSelectionVisuals();
+                        isDragging = false;
+                        hasMoved = false;
+                        lastTap = Date.now();
+                        return;
+                    }
+
+                    el.setPointerCapture(e.pointerId);
+                    isDragging = true;
+                    hasMoved = false;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    origHoles = state.holes.map(h => ({ x: h.x, y: h.y }));
+                    el.style.zIndex = '40';
+                });
+
+                el.addEventListener('pointermove', (e) => {
+                    if (!isDragging) return;
+                    if (!hasMoved && Math.hypot(e.clientX - startX, e.clientY - startY) > 4) {
+                        hasMoved = true;
+                        pushStep3History();
+                        el.style.opacity = '0.85';
+                    }
+                    if (!hasMoved) return;
+
+                    const dx = (e.clientX - startX) / (PX_PER_MM * currentStep3Scale);
+                    const dy = (e.clientY - startY) / (PX_PER_MM * currentStep3Scale);
+                    const center = moveHolesPairByDelta(origHoles, dx, dy);
+                    showAlignmentGuides(center.midX, center.midY, [], false);
+                });
+
+                const endDrag = (e) => {
+                    if (!wasAlreadySelected || !isDragging) return;
+                    isDragging = false;
+                    el.style.zIndex = '';
+                    el.style.opacity = '';
+                    clearAlignmentGuides();
+                    try { el.releasePointerCapture(e.pointerId); } catch (_) {}
+
+                    if (!hasMoved) {
+                        const now = Date.now();
+                        if (now - lastTap < 350) {
+                            lastTap = 0;
+                            openHoleSpacingModal();
+                        } else {
+                            lastTap = now;
+                        }
+                    }
+                };
+                el.addEventListener('pointerup', endDrag);
+                el.addEventListener('pointercancel', endDrag);
+            });
+
+            // 客製化文字 / IG / LOGO：點一下選取顯示藍色虛線 1pt 外框後才可拖曳，雙擊編輯
+            document.querySelectorAll('.custom-item').forEach(el => {
+                const idx = Number(el.dataset.idx);
+                let isDragging = false;
+                let hasMoved = false;
+                let wasAlreadySelected = false;
+                let startX = 0, startY = 0;
+                let origX = 0, origY = 0;
+                let lastTap = 0;
+
+                el.addEventListener('pointerdown', (e) => {
+                    e.stopPropagation();
+                    wasAlreadySelected = (state.selectedCustomIdx === idx);
+
+                    if (!wasAlreadySelected) {
+                        state.selectedCustomIdx = idx;
+                        state.selectedHoleIdx = -1;
+                        updateCustomSelectionVisuals();
+                        isDragging = false;
+                        hasMoved = false;
+                        lastTap = Date.now();
+                        return;
+                    }
+
+                    el.setPointerCapture(e.pointerId);
+                    isDragging = true;
+                    hasMoved = false;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    origX = state.customItems[idx].x;
+                    origY = state.customItems[idx].y;
+                    el.style.zIndex = '40';
+                });
+
+                el.addEventListener('pointermove', (e) => {
+                    if (!isDragging) return;
+                    if (!hasMoved && Math.hypot(e.clientX - startX, e.clientY - startY) > 4) {
+                        hasMoved = true;
+                        pushStep3History();
+                    }
+                    if (!hasMoved) return;
+
+                    const dx = (e.clientX - startX) / (PX_PER_MM * currentStep3Scale);
+                    const dy = (e.clientY - startY) / (PX_PER_MM * currentStep3Scale);
+
+                    let newX = Math.max(0, Math.min(state.cardW, origX + dx));
+                    let newY = Math.max(0, Math.min(state.cardH, origY + dy));
+
+                    if (Math.abs(newX - state.cardW / 2) < 1) newX = state.cardW / 2;
+                    if (Math.abs(newY - state.cardH / 2) < 1) newY = state.cardH / 2;
+
+                    const item = state.customItems[idx];
+                    item.x = Number(newX.toFixed(2));
+                    item.y = Number(newY.toFixed(2));
+                    el.style.left = `${item.x * PX_PER_MM}px`;
+                    el.style.top = `${item.y * PX_PER_MM}px`;
+
+                    const nearEdge = isItemNearEdge3mm(item, el);
+                    showAlignmentGuides(item.x, item.y, state.holes, nearEdge);
+                });
+
+                const endDrag = (e) => {
+                    if (!wasAlreadySelected) return;
+                    if (!isDragging) return;
+                    isDragging = false;
+                    el.style.zIndex = '';
+                    clearAlignmentGuides();
+                    try { el.releasePointerCapture(e.pointerId); } catch (_) {}
+
+                    const item = state.customItems[idx];
+                    if (hasMoved) {
+                        if (isItemNearEdge3mm(item, el)) {
+                            openCustomModal({
+                                title: '裁切安全提醒',
+                                message: '重要圖文請勿靠近邊緣',
+                                showInput: false
+                            });
+                        }
+                    } else {
+                        if (item.type === 'ig') {
+                            openEditItemModal(idx);
+                            return;
+                        }
+                        const now = Date.now();
+                        if (now - lastTap < 350) {
+                            lastTap = 0;
+                            openEditItemModal(idx);
+                        } else {
+                            lastTap = now;
+                        }
+                    }
+                };
+                el.addEventListener('pointerup', endDrag);
+                el.addEventListener('pointercancel', endDrag);
+            });
+        }
+
+        // ==================== 尺寸、吊牌孔與左側工具列功能 ====================
+        function adjustCardDim(axis, delta) {
+            pushStep3History();
+            if (axis === 'w') {
+                state.cardW = Math.max(10, Math.min(200, state.cardW + delta));
+            } else {
+                state.cardH = Math.max(10, Math.min(200, state.cardH + delta));
+            }
+            renderStep3Scene();
+        }
+
+        function manualCardDimChange() {
+            pushStep3History();
+            const wVal = parseInt(document.getElementById('input-card-w').value, 10);
+            const hVal = parseInt(document.getElementById('input-card-h').value, 10);
+            if (!isNaN(wVal)) state.cardW = Math.max(10, Math.min(200, wVal));
+            if (!isNaN(hVal)) state.cardH = Math.max(10, Math.min(200, hVal));
+            renderStep3Scene();
+        }
+
+        function toggleTagHole(enable) {
+            pushStep3History();
+            state.hasTagHole = enable;
+            renderStep3Items();
+        }
+
+        // 以 1mm 為單位微調目前選取物件的位置（耳孔為兩耳對稱連動）
+        function nudgeSelectedItem(dx, dy) {
+            if (state.selectedHoleIdx !== -1 && state.holes[state.selectedHoleIdx]) {
+                pushStep3History();
+                const minX = Math.min(...state.holes.map(h => h.x));
+                const maxX = Math.max(...state.holes.map(h => h.x));
+                const minY = Math.min(...state.holes.map(h => h.y));
+                const maxY = Math.max(...state.holes.map(h => h.y));
+                const clampedDx = Math.max(3 - minX, Math.min((state.cardW - 3) - maxX, dx));
+                const clampedDy = Math.max(3 - minY, Math.min((state.cardH - 3) - maxY, dy));
+
+                state.holes.forEach((hole, i) => {
+                    hole.x = Number((hole.x + clampedDx).toFixed(2));
+                    hole.y = Number((hole.y + clampedDy).toFixed(2));
+                    const holeEl = document.querySelector(`.hole-item[data-idx="${i}"]`);
+                    if (holeEl) {
+                        holeEl.style.left = `${hole.x * PX_PER_MM}px`;
+                        holeEl.style.top = `${hole.y * PX_PER_MM}px`;
+                    }
+                });
+                clearAlignmentGuides();
+                return;
+            }
+
+            if (state.selectedCustomIdx !== -1 && state.customItems[state.selectedCustomIdx]) {
+                pushStep3History();
+                const cIdx = state.selectedCustomIdx;
+                const item = state.customItems[cIdx];
+                item.x = Number(Math.max(0, Math.min(state.cardW, item.x + dx)).toFixed(2));
+                item.y = Number(Math.max(0, Math.min(state.cardH, item.y + dy)).toFixed(2));
+                const itemEl = document.querySelector(`.custom-item[data-idx="${cIdx}"]`);
+                if (itemEl) {
+                    itemEl.style.left = `${item.x * PX_PER_MM}px`;
+                    itemEl.style.top = `${item.y * PX_PER_MM}px`;
+                }
+                if (isItemNearEdge3mm(item, itemEl)) {
+                    showAlignmentGuides(item.x, item.y, state.holes, true);
+                    openCustomModal({
+                        title: '裁切安全提醒',
+                        message: '重要圖文請勿靠近邊緣',
+                        showInput: false,
+                        onConfirm: () => clearAlignmentGuides()
+                    });
+                } else {
+                    clearAlignmentGuides();
+                }
+            }
+        }
+
+        // 雙擊耳孔：調整兩耳孔距（1mm 為單位）
+        function openHoleSpacingModal() {
+            if (state.holes.length < 2) return;
+            pushStep3History();
+            const curDist = Math.round(Math.abs(state.holes[1].x - state.holes[0].x));
+            const valEl = document.getElementById('modal-hole-dist-val');
+            if (valEl) valEl.innerText = `${curDist} mm`;
+            openCustomModal({
+                title: '調整兩耳孔距',
+                message: '以 1mm 為單位對稱調整左右耳孔距離：',
+                showInput: false,
+                showHoleControls: true,
+                onConfirm: null
+            });
+        }
+
+        function adjustHoleSpacing(delta) {
+            if (state.holes.length < 2) return;
+            const h0 = state.holes[0];
+            const h1 = state.holes[1];
+            const leftHole = h0.x <= h1.x ? h0 : h1;
+            const rightHole = h0.x <= h1.x ? h1 : h0;
+
+            const curDist = Math.abs(rightHole.x - leftHole.x);
+            const maxDist = Math.max(4, Math.floor(state.cardW - 6));
+            const newDist = Math.max(4, Math.min(maxDist, Math.round(curDist) + delta));
+
+            let midX = (leftHole.x + rightHole.x) / 2;
+            midX = Math.max(3 + newDist / 2, Math.min(state.cardW - 3 - newDist / 2, midX));
+
+            leftHole.x = Number((midX - newDist / 2).toFixed(2));
+            rightHole.x = Number((midX + newDist / 2).toFixed(2));
+
+            const valEl = document.getElementById('modal-hole-dist-val');
+            if (valEl) valEl.innerText = `${newDist} mm`;
+            renderStep3Items();
+        }
+
+        // ==================== 新增文字 / IG / LOGO 與背景顏色 ====================
+        function addCustomText() {
+            openCustomModal({
+                title: '新增文字',
+                message: '請輸入要顯示在耳卡上的文字內容：',
+                showInput: true,
+                placeholder: '例如：@manyfaces2018',
+                showCancel: true,
+                onConfirm: (val) => {
+                    const text = (val || '').trim();
+                    if (!text) return;
+                    pushStep3History();
+                    state.customItems.push({
+                        type: 'text',
+                        text: text,
+                        x: Number((state.cardW / 2).toFixed(2)),
+                        y: Number(Math.max(6, state.cardH - 6).toFixed(2)),
+                        size: 8,
+                        font: 'Noto Sans TC',
+                        color: '#000000',
+                        baseColor: '#000000',
+                        lightness: 0,
+                        rotation: 0
+                    });
+                    state.selectedCustomIdx = state.customItems.length - 1;
+                    state.selectedHoleIdx = -1;
+                    renderStep3Items();
+                }
+            });
+        }
+
+        function addIGIcon() {
+            const existingIdx = state.customItems.findIndex(item => item.type === 'ig');
+            if (existingIdx !== -1) {
+                state.selectedCustomIdx = existingIdx;
+                state.selectedHoleIdx = -1;
+                updateCustomSelectionVisuals();
+                openEditItemModal(existingIdx);
+                return;
+            }
+            pushStep3History();
+            const yPos = Number(Math.max(6, state.cardH - 6).toFixed(2));
+            const igAccountText = (state.userIg || 'fun').trim();
+            const iconSize = 3;
+            const gap = 1.5;
+            const estTextW = Math.min(Math.max(state.cardW - 14, 8), Math.max(8, igAccountText.length * 1.9));
+            const totalW = iconSize + gap + estTextW;
+            const iconX = Number(Math.max(5, (state.cardW - totalW) / 2 + iconSize / 2).toFixed(2));
+            const textX = Number(Math.min(state.cardW - 5, iconX + iconSize / 2 + gap + estTextW / 2).toFixed(2));
+
+            state.customItems.push({
+                type: 'ig',
+                x: iconX,
+                y: yPos,
+                size: iconSize,
+                color: '#000000',
+                baseColor: '#000000',
+                lightness: 0,
+                rotation: 0
+            });
+            state.customItems.push({
+                type: 'text',
+                text: igAccountText,
+                x: textX,
+                y: yPos,
+                size: 8,
+                font: 'Noto Sans TC',
+                color: '#000000',
+                baseColor: '#000000',
+                lightness: 0,
+                rotation: 0
+            });
+            state.selectedCustomIdx = state.customItems.length - 2;
+            state.selectedHoleIdx = -1;
+            renderStep3Items();
+        }
+
+        function addLogoBox() {
+            pushStep3History();
+            state.customItems.push({
+                type: 'logo',
+                x: Number((state.cardW / 2).toFixed(2)),
+                y: Number((state.cardH / 2).toFixed(2)),
+                w: 15,
+                h: 10,
+                rotation: 0
+            });
+            state.selectedCustomIdx = state.customItems.length - 1;
+            state.selectedHoleIdx = -1;
+            renderStep3Items();
+        }
+
+        // ==================== 背景顏色設定 ====================
+        function openBgColorModal() {
+            pushStep3History();
+            openCustomModal({
+                title: '設定背景顏色',
+                message: '請選擇耳卡底色並可微調深淺：',
+                showInput: false,
+                showBgControls: true,
+                onConfirm: null
+            });
+            updateBgColorUI();
+        }
+
+        function applyCardBgColor(hex) {
+            state.cardBg = hex;
+            const cardEl = document.getElementById('step3-card');
+            if (cardEl) cardEl.style.backgroundColor = hex;
+            const bgDot = document.getElementById('bg-btn-dot');
+            if (bgDot) bgDot.style.backgroundColor = hex;
+        }
+
+        function updateBgColorUI() {
+            const preview = document.getElementById('modal-bg-color-preview');
+            if (preview) preview.style.backgroundColor = state.cardBg || '#ffffff';
+            const slider = document.getElementById('modal-bg-lightness');
+            if (slider) slider.value = state.cardBgLightness;
+            const base = (state.cardBgBase || '#ffffff').toLowerCase();
+            document.querySelectorAll('.bg-color-swatch').forEach(btn => {
+                if ((btn.dataset.color || '').toLowerCase() === base) {
+                    btn.style.outline = '2.5px solid #111111';
+                    btn.style.outlineOffset = '2px';
+                    btn.style.transform = 'scale(1.15)';
+                } else {
+                    btn.style.outline = 'none';
+                    btn.style.outlineOffset = '0px';
+                    btn.style.transform = 'scale(1)';
+                }
+            });
+        }
+
+        function selectCardBgBaseColor(hex) {
+            state.cardBgBase = hex;
+            const hsl = hexToHsl(hex);
+            state.cardBgLightness = Math.round(hsl.l);
+            applyCardBgColor(hex);
+            updateBgColorUI();
+        }
+
+        function setCardBgLightness(val) {
+            const l = Number(val);
+            state.cardBgLightness = l;
+            const baseHsl = hexToHsl(state.cardBgBase || '#ffffff');
+            const newHex = hslToHex(baseHsl.h, baseHsl.s, l);
+            applyCardBgColor(newHex);
+            updateBgColorUI();
+        }
+
+        function adjustCardBgLightness(delta) {
+            const nextVal = Math.max(0, Math.min(100, (Number(state.cardBgLightness) || 0) + delta));
+            const slider = document.getElementById('modal-bg-lightness');
+            if (slider) slider.value = nextVal;
+            setCardBgLightness(nextVal);
+        }
+
+        // ==================== 物件細部編輯視窗 ====================
+        let editingItemIdx = -1;
+
+        function openEditItemModal(idx) {
+            const item = state.customItems[idx];
+            if (!item) return;
+            pushStep3History();
+            editingItemIdx = idx;
+
+            const sizeRow = document.getElementById('modal-size-row');
+            const sizeLabel = document.getElementById('modal-size-label');
+            const sizeVal = document.getElementById('modal-size-val');
+            const logoDims = document.getElementById('modal-logo-dims');
+            const fontRow = document.getElementById('modal-font-row');
+            const colorRow = document.getElementById('modal-color-row');
+
+            if (item.type === 'text') {
+                sizeRow.classList.remove('hidden');
+                sizeRow.classList.add('flex');
+                sizeLabel.innerText = '文字大小';
+                sizeVal.innerText = `${item.size} pt`;
+                logoDims.classList.add('hidden');
+                logoDims.classList.remove('flex');
+                fontRow.classList.remove('hidden');
+                fontRow.classList.add('flex');
+                colorRow.classList.remove('hidden');
+                colorRow.classList.add('flex');
+
+                openCustomModal({
+                    title: '編輯文字',
+                    message: '',
+                    showInput: true,
+                    defaultVal: item.text,
+                    showItemControls: true,
+                    onConfirm: (val) => {
+                        const txt = (val || '').trim();
+                        if (txt && state.customItems[editingItemIdx]) {
+                            state.customItems[editingItemIdx].text = txt;
+                            renderStep3Items();
+                        }
+                        editingItemIdx = -1;
+                    }
+                });
+                updateItemFontUI(item);
+                updateItemColorUI(item);
+            } else if (item.type === 'ig') {
+                sizeRow.classList.remove('hidden');
+                sizeRow.classList.add('flex');
+                sizeLabel.innerText = '圖示尺寸';
+                sizeVal.innerText = `${item.size} mm`;
+                logoDims.classList.add('hidden');
+                logoDims.classList.remove('flex');
+                fontRow.classList.add('hidden');
+                fontRow.classList.remove('flex');
+                colorRow.classList.remove('hidden');
+                colorRow.classList.add('flex');
+
+                openCustomModal({
+                    title: '編輯 IG 圖示',
+                    message: '',
+                    showInput: false,
+                    showItemControls: true,
+                    onConfirm: () => { editingItemIdx = -1; }
+                });
+                updateItemColorUI(item);
+            } else if (item.type === 'logo') {
+                sizeRow.classList.add('hidden');
+                sizeRow.classList.remove('flex');
+                logoDims.classList.remove('hidden');
+                logoDims.classList.add('flex');
+                document.getElementById('modal-logo-w').value = item.w;
+                document.getElementById('modal-logo-h').value = item.h;
+                fontRow.classList.add('hidden');
+                fontRow.classList.remove('flex');
+                colorRow.classList.add('hidden');
+                colorRow.classList.remove('flex');
+
+                openCustomModal({
+                    title: '編輯 LOGO 方塊',
+                    message: '',
+                    showInput: false,
+                    showItemControls: true,
+                    onConfirm: () => { editingItemIdx = -1; }
+                });
+            }
+        }
+
+        function adjustModalItemSize(delta) {
+            const item = state.customItems[editingItemIdx];
+            if (!item) return;
+            const sizeVal = document.getElementById('modal-size-val');
+            if (item.type === 'text') {
+                item.size = Math.max(4, Math.min(48, item.size + delta));
+                if (sizeVal) sizeVal.innerText = `${item.size} pt`;
+            } else if (item.type === 'ig') {
+                item.size = Number(Math.max(1.5, Math.min(20, item.size + delta * 0.5)).toFixed(1));
+                if (sizeVal) sizeVal.innerText = `${item.size} mm`;
+            }
+            renderStep3Items();
+        }
+
+        function adjustModalLogoDim(axis, delta) {
+            const item = state.customItems[editingItemIdx];
+            if (!item || item.type !== 'logo') return;
+            if (axis === 'w') {
+                item.w = Number(Math.max(3, Math.min(state.cardW, item.w + delta)).toFixed(1));
+                document.getElementById('modal-logo-w').value = item.w;
+            } else {
+                item.h = Number(Math.max(3, Math.min(state.cardH, item.h + delta)).toFixed(1));
+                document.getElementById('modal-logo-h').value = item.h;
+            }
+            renderStep3Items();
+        }
+
+        function inputModalLogoDim() {
+            const item = state.customItems[editingItemIdx];
+            if (!item || item.type !== 'logo') return;
+            const wVal = parseFloat(document.getElementById('modal-logo-w').value);
+            const hVal = parseFloat(document.getElementById('modal-logo-h').value);
+            if (!isNaN(wVal)) item.w = Number(Math.max(3, Math.min(state.cardW, wVal)).toFixed(1));
+            if (!isNaN(hVal)) item.h = Number(Math.max(3, Math.min(state.cardH, hVal)).toFixed(1));
+            renderStep3Items();
+        }
+
+        function updateItemFontUI(item) {
+            const curFont = item.font || 'Noto Sans TC';
+            document.querySelectorAll('.item-font-btn').forEach(btn => {
+                if (btn.dataset.font === curFont) {
+                    btn.classList.add('bg-orange-100', 'border-orange-500');
+                    btn.classList.remove('bg-white');
+                } else {
+                    btn.classList.remove('bg-orange-100', 'border-orange-500');
+                    btn.classList.add('bg-white');
+                }
+            });
+        }
+
+        function selectModalItemFont(fontKey) {
+            const item = state.customItems[editingItemIdx];
+            if (!item || item.type !== 'text') return;
+            item.font = fontKey;
+            updateItemFontUI(item);
+            renderStep3Items();
+        }
+
+        function updateItemColorUI(item) {
+            const curColor = item.color || '#000000';
+            const base = (item.baseColor || curColor).toLowerCase();
+            const l = (typeof item.lightness === 'number') ? item.lightness : Math.round(hexToHsl(curColor).l);
+
+            const preview = document.getElementById('modal-item-color-preview');
+            if (preview) preview.style.backgroundColor = curColor;
+            const slider = document.getElementById('modal-item-lightness');
+            if (slider) slider.value = l;
+
+            document.querySelectorAll('.item-color-swatch').forEach(btn => {
+                if ((btn.dataset.color || '').toLowerCase() === base) {
+                    btn.style.outline = '2.5px solid #111111';
+                    btn.style.outlineOffset = '2px';
+                    btn.style.transform = 'scale(1.15)';
+                } else {
+                    btn.style.outline = 'none';
+                    btn.style.outlineOffset = '0px';
+                    btn.style.transform = 'scale(1)';
+                }
+            });
+        }
+
+        function selectModalItemBaseColor(hex) {
+            const item = state.customItems[editingItemIdx];
+            if (!item) return;
+            item.baseColor = hex;
+            item.color = hex;
+            item.lightness = Math.round(hexToHsl(hex).l);
+            updateItemColorUI(item);
+            renderStep3Items();
+        }
+
+        function setModalItemLightness(val) {
+            const item = state.customItems[editingItemIdx];
+            if (!item) return;
+            const l = Number(val);
+            item.lightness = l;
+            const baseHsl = hexToHsl(item.baseColor || item.color || '#000000');
+            item.color = hslToHex(baseHsl.h, baseHsl.s, l);
+            updateItemColorUI(item);
+            renderStep3Items();
+        }
+
+        function adjustModalItemLightness(delta) {
+            const item = state.customItems[editingItemIdx];
+            if (!item) return;
+            const curVal = (typeof item.lightness === 'number') ? item.lightness : Math.round(hexToHsl(item.color || '#000000').l);
+            const nextVal = Math.max(0, Math.min(100, curVal + delta));
+            const slider = document.getElementById('modal-item-lightness');
+            if (slider) slider.value = nextVal;
+            setModalItemLightness(nextVal);
+        }
+
+        function rotateModalItem() {
+            const item = state.customItems[editingItemIdx];
+            if (!item) return;
+            item.rotation = ((item.rotation || 0) + 90) % 360;
+            renderStep3Items();
+        }
+
+        function deleteModalItem() {
+            if (editingItemIdx === -1) return;
+            state.customItems.splice(editingItemIdx, 1);
+            state.selectedCustomIdx = -1;
+            editingItemIdx = -1;
+            closeCustomModal();
+            renderStep3Items();
+        }
+
+        // ==================== 共用彈跳視窗控制 ====================
+        let modalConfirmCallback = null;
+
+        function openCustomModal(opts = {}) {
+            const modal = document.getElementById('custom-modal');
+            const titleEl = document.getElementById('modal-title');
+            const msgEl = document.getElementById('modal-message');
+            const inputEl = document.getElementById('modal-input');
+            const itemCtrl = document.getElementById('modal-item-controls');
+            const bgCtrl = document.getElementById('modal-bg-controls');
+            const holeCtrl = document.getElementById('modal-hole-controls');
+            const cancelBtn = document.getElementById('modal-cancel-btn');
+
+            titleEl.innerText = opts.title || '提示';
+            msgEl.innerText = opts.message || '';
+            msgEl.classList.toggle('hidden', !opts.message);
+
+            if (opts.showInput) {
+                inputEl.classList.remove('hidden');
+                inputEl.value = opts.defaultVal || '';
+                inputEl.placeholder = opts.placeholder || '';
+                setTimeout(() => inputEl.focus(), 50);
+            } else {
+                inputEl.classList.add('hidden');
+                inputEl.value = '';
+            }
+
+            if (opts.showItemControls) {
+                itemCtrl.classList.remove('hidden');
+                itemCtrl.classList.add('flex');
+            } else {
+                itemCtrl.classList.add('hidden');
+                itemCtrl.classList.remove('flex');
+            }
+
+            if (opts.showBgControls) {
+                bgCtrl.classList.remove('hidden');
+                bgCtrl.classList.add('flex');
+            } else {
+                bgCtrl.classList.add('hidden');
+                bgCtrl.classList.remove('flex');
+            }
+
+            if (holeCtrl) {
+                if (opts.showHoleControls) {
+                    holeCtrl.classList.remove('hidden');
+                    holeCtrl.classList.add('flex');
+                } else {
+                    holeCtrl.classList.add('hidden');
+                    holeCtrl.classList.remove('flex');
+                }
+            }
+
+            if (opts.showCancel) {
+                cancelBtn.classList.remove('hidden');
+            } else {
+                cancelBtn.classList.add('hidden');
+            }
+
+            modalConfirmCallback = opts.onConfirm || null;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeCustomModal() {
+            const modal = document.getElementById('custom-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            modalConfirmCallback = null;
+        }
+
+        function confirmCustomModal() {
+            const inputVal = document.getElementById('modal-input').value;
+            const cb = modalConfirmCallback;
+            closeCustomModal();
+            if (typeof cb === 'function') cb(inputVal);
+        }
+
+        // ==================== 第四關與第五關：預覽、材質與報價 ====================
+        function buildStaticCardPreviewHTML(maxW, maxH) {
+            const cardPxW = state.cardW * PX_PER_MM;
+            const cardPxH = state.cardH * PX_PER_MM;
+            const scale = Math.min(maxW / cardPxW, maxH / cardPxH, 1.15);
+
+            let inner = '';
+            if (state.hasTagHole) {
+                const tagD = 5 * PX_PER_MM;
+                const tagX = (state.cardW / 2) * PX_PER_MM;
+                const tagY = 6 * PX_PER_MM;
+                inner += `<div class="absolute rounded-full border border-[#00a0e9]" style="width:${tagD}px; height:${tagD}px; left:${tagX}px; top:${tagY}px; transform:translate(-50%, -50%);"></div>`;
+            }
+
+            state.holes.forEach(h => {
+                inner += `<div class="absolute" style="left:${h.x * PX_PER_MM}px; top:${h.y * PX_PER_MM}px;">${createHoleSVG(state.holeType)}</div>`;
+            });
+
+            state.customItems.forEach(item => {
+                const leftPx = item.x * PX_PER_MM;
+                const topPx = item.y * PX_PER_MM;
+                if (item.type === 'text') {
+                    const fontPx = item.size * (PX_PER_MM * 0.3527);
+                    const fontCss = getFontFamilyCSS(item.font);
+                    inner += `<div class="absolute whitespace-nowrap font-bold px-1" style="left:${leftPx}px; top:${topPx}px; font-size:${fontPx}px; font-family:${fontCss}; color:${item.color || '#000000'}; transform:translate(-50%, -50%) rotate(${item.rotation}deg);">${escapeHTML(item.text)}</div>`;
+                } else if (item.type === 'ig') {
+                    const sizePx = item.size * PX_PER_MM;
+                    inner += `<div class="absolute flex items-center justify-center" style="left:${leftPx}px; top:${topPx}px; width:${sizePx}px; height:${sizePx}px; transform:translate(-50%, -50%) rotate(${item.rotation}deg);">
+                        <svg viewBox="0 0 24 24" class="w-full h-full" fill="none" stroke="${item.color || '#000000'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                            <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                            <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                        </svg>
+                    </div>`;
+                } else if (item.type === 'logo') {
+                    const wPx = item.w * PX_PER_MM;
+                    const hPx = item.h * PX_PER_MM;
+                    const fontSize = Math.max(7, Math.min(wPx * 0.24, hPx * 0.42, 14));
+                    inner += `<div class="absolute flex items-center justify-center font-black text-gray-700" style="left:${leftPx}px; top:${topPx}px; width:${wPx}px; height:${hPx}px; background-color:rgba(0,0,0,0.25); border-radius:5px; font-size:${fontSize}px; transform:translate(-50%, -50%) rotate(${item.rotation}deg);">LOGO</div>`;
+                }
+            });
+
+            return `<div style="width:${cardPxW * scale}px; height:${cardPxH * scale}px; display:flex; align-items:center; justify-content:center;">
+                <div style="transform:scale(${scale}); transform-origin:center;">
+                    <div class="relative shadow-sm overflow-hidden" style="width:${cardPxW}px; height:${cardPxH}px; background-color:${state.cardBg || '#ffffff'}; border:0.75pt solid #000000;">
+                        ${inner}
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        function checkoutDesign() {
+            const mods = getFinalMods(state.cardW, state.cardH);
+            if (mods === 'ERROR_MIN_SIZE') {
+                openCustomModal({
+                    title: '尺寸無法裁切',
+                    message: '此尺寸低於 30mm 裁刀限制（且不符合 0.5 單位規格），無法裁切，請調整耳卡尺寸後再試。',
+                    showInput: false
+                });
+                return;
+            }
+            state.selectedCustomIdx = -1;
+            state.selectedHoleIdx = -1;
+            document.getElementById('step4-preview-box').innerHTML = buildStaticCardPreviewHTML(240, 130);
+            const holeLabel = state.holeType === 'pin' ? '耳針孔' : '耳夾孔';
+            const tagLabel = state.hasTagHole ? '含 5mm 吊牌孔' : '無吊牌孔';
+            document.getElementById('step4-spec-summary').innerText = `尺寸：${state.cardW} x ${state.cardH} mm ｜ ${mods} 單位 ｜ ${holeLabel} ｜ ${tagLabel}`;
+            selectMaterial(state.material || 'coated');
+            showStep(4);
+        }
+
+        function selectMaterial(mat) {
+            state.material = mat;
+            const coatedCard = document.getElementById('mat-card-coated');
+            const ivoryCard = document.getElementById('mat-card-ivory');
+            const coatedRadio = document.getElementById('radio-mat-coated');
+            const ivoryRadio = document.getElementById('radio-mat-ivory');
+            const darkWarn = document.getElementById('ivory-dark-bg-warning');
+
+            if (mat === 'coated') {
+                coatedCard.className = 'euro-card-orange p-4 cursor-pointer transition-all';
+                ivoryCard.className = 'euro-card p-4 cursor-pointer transition-all';
+                coatedRadio.checked = true;
+            } else {
+                coatedCard.className = 'euro-card p-4 cursor-pointer transition-all';
+                ivoryCard.className = 'euro-card-orange p-4 cursor-pointer transition-all';
+                ivoryRadio.checked = true;
+            }
+
+            if (darkWarn) {
+                const bgLightness = hexToHsl(state.cardBg || '#ffffff').l;
+                if (mat === 'ivory' && bgLightness < 60) {
+                    darkWarn.classList.remove('hidden');
+                } else {
+                    darkWarn.classList.add('hidden');
+                }
+            }
+        }
+
+        /**
+         * 取得最終報價膜數 (完美符合 0.5 模定義與 30mm 裁刀限制)
+         * @param {number} w - 寬度 (mm)
+         * @param {number} h - 高度 (mm)
+         * @returns {number|string} 膜數 (0.5, 1, 2...) 或錯誤代碼 "ERROR_MIN_SIZE"
+         */
+        function getFinalMods(w, h) {
+            // 自動排序長短邊，橫直都可以通
+            const maxSide = Math.max(w, h);
+            const minSide = Math.min(w, h);
+
+            // --- 階段 1：驗證是否為 0.5 模 ---
+            // 0.5模 條件 A：短邊剛好 27mm，且長邊介於 40~90mm
+            const isHalfType1 = (minSide === 27) && (maxSide >= 40 && maxSide <= 90);
+            // 0.5模 條件 B：短邊介於 30~45mm，且長邊介於 30~54mm
+            const isHalfType2 = (minSide >= 30 && minSide <= 45) && (maxSide >= 30 && maxSide <= 54);
+
+            if (isHalfType1 || isHalfType2) {
+                return 0.5;
+            }
+
+            // --- 階段 2：擋掉不合法的裁刀尺寸 ---
+            // 只要不是上面的 0.5 模合法條件，剩下的任何尺寸，只要有一邊低於 30mm 就是無法裁切
+            if (minSide < 30) {
+                return "ERROR_MIN_SIZE";
+            }
+
+            // --- 階段 3：常規模數計算 (1模、2模、3模...) ---
+            // 系統自動補上上下左右各 1mm 出血
+            const bleedW = w + 2;
+            const bleedH = h + 2;
+
+            const modsNormal = Math.ceil(bleedW / 92) * Math.ceil(bleedH / 56);
+            const modsRotated = Math.ceil(bleedW / 56) * Math.ceil(bleedH / 92);
+
+            return Math.min(modsNormal, modsRotated);
+        }
+
+        function computeMoldInfo() {
+            const mods = getFinalMods(state.cardW, state.cardH);
+            const moldUnits = (typeof mods === 'number') ? mods : 1;
+            return { baseQty: 500, moldUnits: moldUnits };
+        }
+
+        function goToStep5() {
+            state.qtyStep = 0;
+            document.getElementById('step5-preview-box').innerHTML = buildStaticCardPreviewHTML(240, 125);
+            const holeLabel = state.holeType === 'pin' ? '耳針孔' : '耳夾孔';
+            const tagLabel = state.hasTagHole ? '是 (5mm)' : '否';
+            const matLabel = state.material === 'coated' ? '銅西卡 + 正面霧膜' : '頂級象牙';
+            document.getElementById('step5-spec-summary').innerHTML = `
+                <div>• 成品尺寸：${state.cardW} × ${state.cardH} mm</div>
+                <div>• 打孔款式：${holeLabel}（吊牌孔：${tagLabel}）</div>
+                <div>• 紙張材質：${matLabel}</div>
+            `;
+            updatePricing();
+            showStep(5);
+        }
+
+        function changeQtyUnit(delta) {
+            state.qtyStep = Math.max(0, state.qtyStep + delta);
+            updatePricing();
+        }
+
+        function updatePricing() {
+            const { baseQty, moldUnits } = computeMoldInfo();
+            const multiplier = state.qtyStep + 1;
+            const totalQty = baseQty * multiplier;
+
+            const basePricePerUnit = (state.material === 'coated') ? 1000 : 1100;
+            const selfPrice = basePricePerUnit * moldUnits * multiplier;
+            const originalPrice = selfPrice + 200;
+
+            document.getElementById('qty-unit-label').innerText = `數量(基本量${baseQty})`;
+            document.getElementById('qty-display').innerText = `${totalQty.toLocaleString()} 張`;
+            document.getElementById('price-original').innerText = `$${originalPrice.toLocaleString()}`;
+            document.getElementById('price-self').innerText = `$${selfPrice.toLocaleString()}`;
+        }
+
+        window.addEventListener('resize', () => {
+            const step3 = document.getElementById('step3');
+            if (step3 && !step3.classList.contains('hidden')) {
+                renderStep3Scene();
+            }
+        });
+
+        // ==================== 行為追蹤（Google 試算表） ====================
+        const analytics = {
+            sessionId: 'MF-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase(),
+            currentStep: 1,
+            maxStep: 1,
+            stepEnteredAt: Date.now(),
+            durations: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+            submitted: false
+        };
+
+        function flushCurrentStepDuration() {
+            const now = Date.now();
+            const elapsedSec = Math.max(0, (now - analytics.stepEnteredAt) / 1000);
+            analytics.durations[analytics.currentStep] = Number((analytics.durations[analytics.currentStep] + elapsedSec).toFixed(1));
+            analytics.stepEnteredAt = now;
+        }
+
+        function getTotalDurationSec() {
+            const d = analytics.durations;
+            return Number((d[1] + d[2] + d[3] + d[4] + d[5]).toFixed(1));
+        }
+
+        function buildAnalyticsPayload(actionType, extra = {}) {
+            flushCurrentStepDuration();
+            return Object.assign({
+                action: actionType,
+                sessionId: analytics.sessionId,
+                igAccount: state.userIg || '(未填寫)',
+                lastStep: analytics.submitted ? '已確認製作' : `Step ${analytics.maxStep}`,
+                durations: {
+                    step1: Math.round(analytics.durations[1]),
+                    step2: Math.round(analytics.durations[2]),
+                    step3: Math.round(analytics.durations[3]),
+                    step4: Math.round(analytics.durations[4]),
+                    step5: Math.round(analytics.durations[5])
+                },
+                totalSeconds: Math.round(getTotalDurationSec())
+            }, extra);
+        }
+
+        function sendAnalyticsPing(useBeacon = false) {
+            if (!GAS_WEB_APP_URL) return;
+            const payload = buildAnalyticsPayload('track');
+            const bodyStr = JSON.stringify(payload);
+            try {
+                if (useBeacon && navigator.sendBeacon) {
+                    const blob = new Blob([bodyStr], { type: 'text/plain;charset=utf-8' });
+                    navigator.sendBeacon(GAS_WEB_APP_URL, blob);
+                } else {
+                    fetch(GAS_WEB_APP_URL, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: bodyStr,
+                        keepalive: true
+                    }).catch(() => {});
+                }
+            } catch (_) {}
+        }
+
+        function recordAnalyticsStepChange(nextStep) {
+            flushCurrentStepDuration();
+            analytics.currentStep = nextStep;
+            if (nextStep > analytics.maxStep) analytics.maxStep = nextStep;
+            analytics.stepEnteredAt = Date.now();
+            sendAnalyticsPing(false);
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                sendAnalyticsPing(true);
+            }
+        });
+        window.addEventListener('pagehide', () => {
+            sendAnalyticsPing(true);
+        });
+
+        // ==================== 1:1 mm SVG 產生器（供 Illustrator 完稿用） ====================
+        function getFontDisplayName(fontKey) {
+            if (fontKey === 'Noto Serif TC') return '思源宋體 (Noto Serif TC)';
+            if (fontKey === 'Huninn') return '粉圓體 (Huninn)';
+            return '思源黑體 (Noto Sans TC)';
+        }
+
+        function generateDesignSVG() {
+            const w = state.cardW;
+            const h = state.cardH;
+            const ptToMm = 25.4 / 72; // 1pt = 0.352778mm
+            const borderStrokeMm = (0.75 * ptToMm).toFixed(4);
+
+            // 刀模圖層（耳孔與吊牌孔）
+            let diecutSvg = '';
+            if (state.hasTagHole) {
+                diecutSvg += `    <circle cx="${(w / 2).toFixed(2)}" cy="6" r="2.5" />\n`;
+            }
+            state.holes.forEach(hole => {
+                if (state.holeType === 'pin') {
+                    diecutSvg += `    <circle cx="${hole.x}" cy="${hole.y}" r="0.75" />\n`;
+                } else {
+                    const topHoleOffsetPt = 8.25 / ptToMm;
+                    const anchorY = 405.5 + topHoleOffsetPt;
+                    diecutSvg += `    <g transform="translate(${hole.x}, ${hole.y}) scale(${ptToMm.toFixed(6)}) translate(-299, -${anchorY.toFixed(3)})" stroke-width="0.75" stroke-miterlimit="10">\n`;
+                    diecutSvg += `      <path d="M300.8,405.5c0,1-0.8,1.8-1.8,1.8s-1.8-0.8-1.8-1.8c0-1,0.8-1.8,1.8-1.8S300.8,404.5,300.8,405.5z"/>\n`;
+                    diecutSvg += `      <path d="M300.8,426.4c0,1-0.8,1.8-1.8,1.8s-1.8-0.8-1.8-1.8s0.8-1.8,1.8-1.8S300.8,425.4,300.8,426.4z"/>\n`;
+                    diecutSvg += `      <path d="M287.7,438.8v-15.5c0-2.8,1.3-5.3,3.3-7.1c2.1-1.8,4.9-2.9,8-2.9l0,0l0,0c3.1,0,6,1.1,8,2.9c2.1,1.8,3.3,4.3,3.3,7.1v15.5"/>\n`;
+                    diecutSvg += `    </g>\n`;
+                }
+            });
+
+            // 圖文圖層（文字、IG 圖示、LOGO 方塊）
+            let artworkSvg = '';
+            state.customItems.forEach(item => {
+                const rot = item.rotation || 0;
+                if (item.type === 'text') {
+                    const fontSizeMm = (item.size * ptToMm).toFixed(3);
+                    const fontFam = item.font || 'Noto Sans TC';
+                    artworkSvg += `    <text x="0" y="0" transform="translate(${item.x}, ${item.y}) rotate(${rot})" font-family="${fontFam}, sans-serif" font-size="${fontSizeMm}" font-weight="700" fill="${item.color || '#000000'}" text-anchor="middle" dominant-baseline="central">${escapeHTML(item.text)}</text>\n`;
+                } else if (item.type === 'ig') {
+                    const s = item.size;
+                    const half = (s / 2).toFixed(3);
+                    const scale = (s / 24).toFixed(6);
+                    artworkSvg += `    <g transform="translate(${item.x}, ${item.y}) rotate(${rot}) translate(-${half}, -${half}) scale(${scale})" fill="none" stroke="${item.color || '#000000'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">\n`;
+                    artworkSvg += `      <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>\n`;
+                    artworkSvg += `      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>\n`;
+                    artworkSvg += `      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>\n`;
+                    artworkSvg += `    </g>\n`;
+                } else if (item.type === 'logo') {
+                    const hw = (item.w / 2).toFixed(3);
+                    const hh = (item.h / 2).toFixed(3);
+                    const fs = Math.max(2, Math.min(item.w * 0.24, item.h * 0.42, 4.5)).toFixed(2);
+                    artworkSvg += `    <g transform="translate(${item.x}, ${item.y}) rotate(${rot})">\n`;
+                    artworkSvg += `      <rect x="-${hw}" y="-${hh}" width="${item.w}" height="${item.h}" rx="1.5" fill="rgba(0,0,0,0.25)"/>\n`;
+                    artworkSvg += `      <text x="0" y="0" font-family="Noto Sans TC, sans-serif" font-size="${fs}" font-weight="900" fill="#374151" text-anchor="middle" dominant-baseline="central">LOGO</text>\n`;
+                    artworkSvg += `    </g>\n`;
+                }
+            });
+
+            return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}">
+  <g id="card-background">
+    <rect x="0" y="0" width="${w}" height="${h}" fill="${state.cardBg || '#ffffff'}" stroke="#000000" stroke-width="${borderStrokeMm}" />
+  </g>
+  <g id="diecut-holes" fill="none" stroke="#00A0E9" stroke-width="${borderStrokeMm}">
+${diecutSvg}  </g>
+  <g id="artwork">
+${artworkSvg}  </g>
+</svg>`;
+        }
+
+        // ==================== 第五關：確認製作與寄信 ====================
+        function handleConfirmProduction() {
+            const curIg = (state.userIg || '').trim();
+            if (!curIg || curIg.toLowerCase() === 'fun') {
+                openCustomModal({
+                    title: '請填寫聯絡方式',
+                    message: '確認製作需要您的真實 IG 帳號或完整 Email，方便百臉與您聯繫確認細節喔！',
+                    showInput: true,
+                    placeholder: '請輸入真實 IG 帳號或完整 Email',
+                    showCancel: true,
+                    onConfirm: (val) => {
+                        const contact = (val || '').trim();
+                        if (!contact || contact.toLowerCase() === 'fun') {
+                            openCustomModal({
+                                title: '聯絡方式未完成',
+                                message: '請填寫真實 IG 帳號或完整 Email（不能填 fun）才能送出確認製作喔！',
+                                showInput: false
+                            });
+                            return;
+                        }
+                        if (contact.includes('@') && contact.indexOf('@') > 0 && !contact.includes('.')) {
+                            openCustomModal({
+                                title: 'Email 格式有誤',
+                                message: '請輸入完整的 Email 地址（例如：name@gmail.com）或您的 IG 帳號。',
+                                showInput: false
+                            });
+                            return;
+                        }
+                        state.userIg = contact;
+                        const step1Input = document.getElementById('input-user-ig');
+                        if (step1Input) step1Input.value = contact;
+                        promptFinalConfirmAndSend();
+                    }
+                });
+                return;
+            }
+            promptFinalConfirmAndSend();
+        }
+
+        function promptFinalConfirmAndSend() {
+            openCustomModal({
+                title: '確認送出製作？',
+                message: `系統將把您的設計圖檔 (SVG) 與規格寄送給百臉。\n聯絡帳號：${state.userIg}\n\n確定送出嗎？`,
+                showInput: false,
+                showCancel: true,
+                onConfirm: () => submitOrderToGAS()
+            });
+        }
+
+        async function submitOrderToGAS() {
+            const btn = document.getElementById('btn-confirm-order');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerText = '傳送設計中...';
+            }
+
+            const { baseQty, moldUnits } = computeMoldInfo();
+            const multiplier = state.qtyStep + 1;
+            const totalQty = baseQty * multiplier;
+            const basePricePerUnit = (state.material === 'coated') ? 1000 : 1100;
+            const selfPrice = basePricePerUnit * moldUnits * multiplier;
+            const originalPrice = selfPrice + 200;
+
+            const matLabel = state.material === 'coated' ? '銅西卡 + 正面霧膜' : '頂級象牙';
+            const holeLabel = state.holeType === 'pin' ? '耳針孔' : '耳夾孔';
+            const tagLabel = state.hasTagHole ? '是 (5mm)' : '否';
+
+            const textDetails = state.customItems
+                .filter(it => it.type === 'text')
+                .map((it, i) => `文字${i + 1}：「${it.text}」／字體：${getFontDisplayName(it.font)}／大小：${it.size}pt／色碼：${it.color || '#000000'}`);
+            const igItem = state.customItems.find(it => it.type === 'ig');
+            const igDetail = igItem ? `IG 圖示：${igItem.size}mm／色碼：${igItem.color || '#000000'}` : '無 IG 圖示';
+
+            const specs = {
+                material: matLabel,
+                quantity: `${totalQty.toLocaleString()} 張`,
+                size: `${state.cardW} x ${state.cardH} mm (${moldUnits} 單位)`,
+                holeStyle: `${holeLabel}（吊牌孔：${tagLabel}）`,
+                bgColor: state.cardBg || '#ffffff',
+                igDetail: igDetail,
+                textDetails: textDetails.length > 0 ? textDetails : ['無新增文字'],
+                originalPrice: `$${originalPrice.toLocaleString()}`,
+                selfPrice: `$${selfPrice.toLocaleString()}`
+            };
+
+            const svgContent = generateDesignSVG();
+
+            if (!GAS_WEB_APP_URL) {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerText = '確 認 製 作';
+                }
+                openCustomModal({
+                    title: '尚未串接後端網址',
+                    message: '目前為測試預覽模式（尚未填入 GAS_WEB_APP_URL）。\n請部署 Google Apps Script 並將網址貼入 index.html 後即可自動寄信與寫入試算表！',
+                    showInput: false
+                });
+                return;
+            }
+
+            analytics.submitted = true;
+            const payload = buildAnalyticsPayload('submit_order', {
+                specs: specs,
+                svgContent: svgContent
+            });
+
+            try {
+                await fetch(GAS_WEB_APP_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (btn) {
+                    btn.innerText = '✓ 已送出確認製作';
+                    btn.classList.add('opacity-70');
+                }
+                openCustomModal({
+                    title: '送出成功！',
+                    message: `我們已收到您的耳卡設計與規格（${state.userIg}）！\n歡迎同時私訊百臉 IG (@manyfaces2018) 告知我們，會更快為您處理喔！`,
+                    showInput: false
+                });
+            } catch (err) {
+                analytics.submitted = false;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerText = '確 認 製 作';
+                }
+                openCustomModal({
+                    title: '傳送失敗',
+                    message: '網路連線異常，請稍後再試，或直接截圖私訊百臉 IG (@manyfaces2018)。',
+                    showInput: false
+                });
+            }
+        }
+    </script>
+</body>
+</html>
